@@ -14,6 +14,9 @@ export type GatewaySessionUsage = {
 export type GatewayMessagePart = {
   type?: string
   text?: string
+  name?: string
+  content?: unknown
+  [key: string]: unknown
 }
 
 export type GatewaySessionMessage = {
@@ -132,7 +135,7 @@ function isAbortError(error: unknown): boolean {
 
 export type SessionHistoryMessage = {
   role: string
-  content?: string | Array<{ type?: string; text?: string }>
+  content?: string | Array<GatewayMessagePart>
   timestamp?: number
   toolName?: string
   toolCallId?: string

@@ -40,7 +40,7 @@ export function OrchestratorCard({
 
   return (
     <>
-      <article className="flex h-[720px] min-h-[720px] flex-col rounded-[1.75rem] border border-[var(--theme-border)] border-l-4 border-l-[var(--theme-accent)] bg-[var(--theme-card)] p-4 shadow-[0_24px_80px_var(--theme-shadow)] lg:h-[800px] lg:min-h-[800px]">
+      <article className="flex h-[430px] min-h-[430px] flex-col rounded-[1.75rem] border border-[var(--theme-border)] border-l-4 border-l-[var(--theme-accent)] bg-[var(--theme-card)] p-4 shadow-[0_24px_80px_var(--theme-shadow)] lg:h-[480px] lg:min-h-[480px]">
         <div className="flex flex-col items-center gap-2 px-3 pt-1 text-center lg:gap-3">
           <div className="relative flex min-h-8 w-full items-center justify-center">
             <h2 className="text-base font-semibold text-[var(--theme-text)]">
@@ -90,6 +90,9 @@ export function OrchestratorCard({
 
           <p className="text-sm text-[var(--theme-muted)]">
             Orchestrator · {totalAgents} agents reporting
+          </p>
+          <p className="max-w-2xl text-xs text-[var(--theme-muted-2)]">
+            Chat compatta del Main Agent: le card operative degli agenti restano subito sotto.
           </p>
 
         </div>

@@ -10,6 +10,18 @@ describe('workspace shell sidebar backdrop', () => {
   })
 })
 
+describe('VT Capital navigation', () => {
+  it('links VT Capital from both mobile navigation surfaces', () => {
+    const hamburger = MOBILE_HAMBURGER_NAV_ITEMS.find((item) => item.id === 'vt-capital')
+    const tab = MOBILE_NAV_TABS.find((item) => item.id === 'vt-capital')
+
+    expect(hamburger?.label).toBe('VT Capital')
+    expect(hamburger?.to).toBe('/vt-capital')
+    expect(hamburger?.match('/vt-capital')).toBe(true)
+    expect(tab?.to).toBe('/vt-capital')
+  })
+})
+
 describe('swarm2 navigation alias handling', () => {
   it('keeps /swarm as the only user-visible swarm entry in the mobile hamburger menu', () => {
     const swarm = MOBILE_HAMBURGER_NAV_ITEMS.find((item) => item.id === 'swarm')

@@ -777,27 +777,27 @@ export async function probeGateway(options?: {
   probePromise = (async () => {
     await Promise.all([autoDetectGatewayUrl(), autoDetectDashboardUrl()])
 
-    const [
-      health,
-      chatCompletions,
-      models,
-      legacySessions,
-      enhancedChat,
-      legacySkills,
-      legacyConfig,
-      legacyJobs,
-      dashboard,
-    ] = await Promise.all([
+    const [health, chatCompletions, models, dashboard] = await Promise.all([
       probe('/health'),
       probeChatCompletions(),
       probe('/v1/models'),
-      probe('/api/sessions'),
-      probeEnhancedChatStream(),
-      probe('/api/skills'),
-      probe('/api/config'),
-      probe('/api/jobs'),
       probeDashboard(),
     ])
+
+    // Hermes Agent dashboard now owns sessions/skills/config/jobs APIs. When it
+    // is available, probing those legacy paths on the core gateway only creates
+    // noisy, expected 404s in the Hermes logs. Keep the fallback probes only for
+    // older enhanced-gateway deployments without a dashboard.
+    const [legacySessions, enhancedChat, legacySkills, legacyConfig, legacyJobs] =
+      dashboard.available
+        ? [false, false, false, false, false]
+        : await Promise.all([
+            probe('/api/sessions'),
+            probeEnhancedChatStream(),
+            probe('/api/skills'),
+            probe('/api/config'),
+            probe('/api/jobs'),
+          ])
 
     // Strict MCP probe runs after dashboard probe so dashboard token
     // resolution (in-page HTML scrape fallback) has had a chance to populate

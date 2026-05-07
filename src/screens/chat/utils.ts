@@ -37,7 +37,7 @@ const KNOWN_CHANNELS = [
 function stripChannelPrefix(text: string): string {
   const match = text.match(CHANNEL_PREFIX_REGEX)
   if (!match) return text
-  const bracket = match[1] ?? ''
+  const bracket = match[1]
   // Strip if it contains a timestamp or known channel name
   const hasTimestamp =
     /\d{4}-\d{2}-\d{2}/.test(bracket) || /\d{2}:\d{2}/.test(bracket)
@@ -101,8 +101,31 @@ function cleanUserText(raw: string): string {
 
 export function textFromMessage(msg: ChatMessage): string {
   const parts = Array.isArray(msg.content) ? msg.content : []
+  const partToText = (part: Record<string, unknown>): string => {
+    if (part.type === 'text') {
+      const value = part.text
+      if (typeof value === 'string') return value
+      if (value == null) return ''
+      try {
+        return JSON.stringify(value, null, 2)
+      } catch {
+        return String(value)
+      }
+    }
+    if (part.type === 'tool_result' || part.type === 'toolResult') {
+      const value = part.content ?? part.result
+      if (typeof value === 'string') return value
+      if (value == null) return ''
+      try {
+        return JSON.stringify(value, null, 2)
+      } catch {
+        return String(value)
+      }
+    }
+    return ''
+  }
   let raw = parts
-    .map((part) => (part.type === 'text' ? String(part.text ?? '') : ''))
+    .map((part) => partToText(part as Record<string, unknown>))
     .join('')
     .trim()
 

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CronJob } from '@/components/cron-manager/cron-types'
+import type { GatewaySession } from '@/lib/gateway-api'
 import { toast } from '@/components/ui/toast'
 import { fetchCronJobs } from '@/lib/cron-api'
-import { fetchSessions, type GatewaySession } from '@/lib/gateway-api'
+import { fetchSessions } from '@/lib/gateway-api'
 import { formatModelName, formatRelativeTime } from '@/screens/dashboard/lib/formatters'
 
 // Claude-Workspace adapter: Operations is backed by Hermes profiles
@@ -105,6 +106,55 @@ type ConfigPayload = {
 const META_STORAGE_PREFIX = 'operations:agents:'
 const SETTINGS_STORAGE_KEY = 'operations-settings'
 
+type BuiltinAgentMeta = Partial<OperationsAgentMeta> & {
+  displayName?: string
+}
+
+const BUILTIN_AGENT_META: Partial<Record<string, BuiltinAgentMeta>> = {
+  default: {
+    displayName: 'Workspace / Default',
+    emoji: '🏠',
+    description: 'Profilo Hermes principale della Workspace',
+    color: '#3b82f6',
+  },
+  hermesmain: {
+    displayName: 'Hermes Main Agent',
+    emoji: '🧭',
+    description: 'Pseudo-orchestratore visivo: coordina agenti, tool e sessioni',
+    color: '#f59e0b',
+  },
+  tradinganalyst: {
+    displayName: 'Trading Analyst',
+    emoji: '📈',
+    description: 'Analisi tecnica: trend, livelli, momentum e setup osservabili',
+    color: '#10b981',
+  },
+  macronewsscout: {
+    displayName: 'Macro News Scout',
+    emoji: '🛰️',
+    description: 'News, macro, sentiment e catalizzatori di mercato',
+    color: '#06b6d4',
+  },
+  riskmanager: {
+    displayName: 'Risk Manager',
+    emoji: '🛡️',
+    description: 'Rischio, invalidazioni, downside e controllo overconfidence',
+    color: '#ef4444',
+  },
+  strategyreviewer: {
+    displayName: 'Strategy Reviewer',
+    emoji: '🧠',
+    description: 'Revisione strategia, bias, coerenza logica e qualità decisionale',
+    color: '#8b5cf6',
+  },
+  operationswatcher: {
+    displayName: 'Operations Watcher',
+    emoji: '🛠️',
+    description: 'Cron, log, runtime, errori e stato operativo del sistema',
+    color: '#64748b',
+  },
+}
+
 const COLOR_PALETTE = [
   { body: '#3b82f6', accent: '#93c5fd' },
   { body: '#10b981', accent: '#6ee7b7' },
@@ -156,6 +206,16 @@ function readString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function safeDisplayValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value == null) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
 function extractSessionText(session: GatewaySession): string {
   const lastMessage = session.lastMessage
   if (lastMessage) {
@@ -164,8 +224,13 @@ function extractSessionText(session: GatewaySession): string {
     }
     if (Array.isArray(lastMessage.content)) {
       const text = lastMessage.content
-        .filter((part) => !part.type || part.type === 'text')
-        .map((part) => part.text ?? '')
+        .map((part) => {
+          if (typeof part.text === 'string') return part.text
+          if (part.type === 'tool_use') return `[tool:${readString(part.name) || 'unknown'}]`
+          if (part.type === 'tool_result') return safeDisplayValue(part.content)
+          return safeDisplayValue(part)
+        })
+        .filter(Boolean)
         .join('\n')
         .trim()
       if (text) return text
@@ -241,7 +306,9 @@ async function fetchOperationsConfig(): Promise<ConfigPayload> {
   const profiles = await fetchClaudeProfiles()
   const list = profiles.map((profile) => ({
     id: profile.name,
-    name: profile.name === 'default' ? 'Workspace' : profile.name,
+    name:
+      BUILTIN_AGENT_META[profile.name]?.displayName ||
+      (profile.name === 'default' ? 'Workspace' : profile.name),
     model: profile.model || '',
     workspace: profile.path,
     agentDir: profile.path,
@@ -308,12 +375,13 @@ async function deleteClaudeProfile(name: string) {
 }
 
 function loadAgentMeta(agentId: string): OperationsAgentMeta {
+  const builtin = BUILTIN_AGENT_META[agentId]
   if (typeof window === 'undefined') {
     return {
-      emoji: createFallbackEmoji(agentId),
-      description: '',
+      emoji: builtin?.emoji || createFallbackEmoji(agentId),
+      description: builtin?.description || '',
       systemPrompt: '',
-      color: createFallbackColor(agentId),
+      color: builtin?.color || createFallbackColor(agentId),
       createdAt: new Date().toISOString(),
     }
   }
@@ -322,28 +390,28 @@ function loadAgentMeta(agentId: string): OperationsAgentMeta {
     const raw = window.localStorage.getItem(`${META_STORAGE_PREFIX}${agentId}`)
     if (!raw) {
       return {
-        emoji: createFallbackEmoji(agentId),
-        description: '',
+        emoji: builtin?.emoji || createFallbackEmoji(agentId),
+        description: builtin?.description || '',
         systemPrompt: '',
-        color: createFallbackColor(agentId),
+        color: builtin?.color || createFallbackColor(agentId),
         createdAt: new Date().toISOString(),
       }
     }
 
     const parsed = JSON.parse(raw) as Partial<OperationsAgentMeta>
     return {
-      emoji: readString(parsed.emoji) || createFallbackEmoji(agentId),
-      description: readString(parsed.description),
+      emoji: readString(parsed.emoji) || builtin?.emoji || createFallbackEmoji(agentId),
+      description: readString(parsed.description) || builtin?.description || '',
       systemPrompt: readString(parsed.systemPrompt),
-      color: readString(parsed.color) || createFallbackColor(agentId),
+      color: readString(parsed.color) || builtin?.color || createFallbackColor(agentId),
       createdAt: readString(parsed.createdAt) || new Date().toISOString(),
     }
   } catch {
     return {
-      emoji: createFallbackEmoji(agentId),
-      description: '',
+      emoji: builtin?.emoji || createFallbackEmoji(agentId),
+      description: builtin?.description || '',
       systemPrompt: '',
-      color: createFallbackColor(agentId),
+      color: builtin?.color || createFallbackColor(agentId),
       createdAt: new Date().toISOString(),
     }
   }
@@ -396,11 +464,11 @@ function persistSettings(settings: OperationsSettings) {
 
 
 
-function getAgentJobs(agentId: string, jobs: CronJob[]): CronJob[] {
+function getAgentJobs(agentId: string, jobs: Array<CronJob>): Array<CronJob> {
   return jobs.filter((job) => job.name?.startsWith(`ops:${agentId}:`))
 }
 
-function getAgentSessions(agentId: string, sessions: GatewaySession[]): GatewaySession[] {
+function getAgentSessions(agentId: string, sessions: Array<GatewaySession>): Array<GatewaySession> {
   return [...sessions]
     .filter((session) => {
       const label = readString(session.label)
@@ -533,7 +601,7 @@ export function useOperations() {
     refetchInterval: 15_000,
   })
 
-  const cronJobsQuery = useQuery({
+  const cronJobsQuery = useQuery<Array<CronJob>>({
     queryKey: ['operations', 'cron'],
     queryFn: fetchCronJobs,
     refetchInterval: 30_000,

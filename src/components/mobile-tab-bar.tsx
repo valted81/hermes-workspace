@@ -95,6 +95,13 @@ export const MOBILE_NAV_TABS: Array<TabItem> = [
     to: '/swarm',
     match: (p) => p === '/swarm' || p.startsWith('/swarm2'),
   },
+  {
+    id: 'vt-capital',
+    label: 'VT',
+    icon: Building01Icon,
+    to: '/vt-capital',
+    match: (p) => p === '/vt-capital',
+  },
 
   {
     id: 'memory',

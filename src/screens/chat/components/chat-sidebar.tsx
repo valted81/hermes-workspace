@@ -587,7 +587,8 @@ function ChatSidebarComponent({
   const isConductorActive = pathname === '/conductor'
   const isOperationsActive = pathname === '/operations'
   const isSwarmActive = pathname === '/swarm' || pathname === '/swarm2'
-  const mainRoutes = ['/chat', '/new', '/files', '/terminal']
+  const isVtCapitalActive = pathname === '/vt-capital'
+  const mainRoutes = ['/chat', '/new', '/files', '/terminal', '/vt-capital']
   const knowledgeRoutes = ['/memory', '/skills']
   const systemRoutes = ['/settings', '/logs']
 
@@ -787,6 +788,14 @@ function ChatSidebarComponent({
       icon: DashboardSquare01Icon,
       label: t('nav.dashboard'),
       active: isDashboardActive,
+    },
+    {
+      kind: 'link',
+      to: '/vt-capital',
+      icon: Building01Icon,
+      label: 'VT Capital',
+      active: isVtCapitalActive,
+      badge: 'BETA',
     },
     {
       kind: 'link',

@@ -1,22 +1,24 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { motion } from 'motion/react'
-import { seedAgentPresets } from './agent-presets'
+import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   AiBrain03Icon,
-  Settings01Icon,
   PlusSignIcon,
+  Settings01Icon,
 } from '@hugeicons/core-free-icons'
-import { cn } from '@/lib/utils'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { motion } from 'motion/react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/screens/dashboard/lib/formatters'
-import { OrchestratorCard } from './components/orchestrator-card'
+import { seedAgentPresets } from './agent-presets'
+import { FullOutputsView } from './components/full-outputs-view'
 import { OperationsAgentCard } from './components/operations-agent-card'
 import { OperationsAgentDetail } from './components/operations-agent-detail'
 import { OperationsNewAgentModal } from './components/operations-new-agent-modal'
 import { OperationsSettingsModal } from './components/operations-settings-modal'
-import { FullOutputsView } from './components/full-outputs-view'
+import { OrchestratorCard } from './components/orchestrator-card'
 import { useOperations } from './hooks/use-operations'
+import type { OperationsAgent } from './hooks/use-operations'
 
 export const THEME_STYLE: CSSProperties = {
   ['--theme-bg' as string]: 'var(--color-surface)',
@@ -40,6 +42,59 @@ export const THEME_STYLE: CSSProperties = {
   ['--theme-warning-soft' as string]: 'color-mix(in srgb, var(--theme-warning) 12%, transparent)',
   ['--theme-warning-soft-strong' as string]: 'color-mix(in srgb, var(--theme-warning) 18%, transparent)',
   ['--theme-warning-border' as string]: 'color-mix(in srgb, var(--theme-warning) 35%, white)',
+}
+
+function AgentRosterStrip({ agents }: { agents: Array<OperationsAgent> }) {
+  return (
+    <section className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-4 shadow-[0_18px_60px_color-mix(in_srgb,var(--theme-shadow)_10%,transparent)]">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">
+            Agent team
+          </h2>
+          <p className="mt-1 text-sm text-[var(--theme-muted-2)]">
+            Vista rapida: questi sono i profili Hermes attivi nella Workspace.
+          </p>
+        </div>
+        <span className="text-xs text-[var(--theme-muted)]">
+          {agents.length} agent{agents.length === 1 ? 'e' : 'i'} visibili
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {agents.map((agent) => (
+          <a
+            key={agent.id}
+            href={`#agent-${agent.id}`}
+            className="group flex items-center gap-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2.5 transition-colors hover:border-[var(--theme-accent)] hover:bg-[var(--theme-accent-soft)]"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] text-lg">
+              {agent.meta.emoji || '🤖'}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-[var(--theme-text)]">
+                {agent.name}
+              </span>
+              <span className="block truncate text-xs text-[var(--theme-muted)]">
+                {agent.meta.description || agent.id}
+              </span>
+            </span>
+            <span
+              className={cn(
+                'size-2.5 shrink-0 rounded-full',
+                agent.status === 'active'
+                  ? 'animate-pulse bg-emerald-500'
+                  : agent.status === 'error'
+                    ? 'bg-red-500'
+                    : 'bg-primary-300',
+              )}
+              title={agent.status}
+            />
+          </a>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 export function OperationsScreen() {
@@ -149,6 +204,8 @@ export function OperationsScreen() {
           <FullOutputsView />
         ) : (
           <>
+            <AgentRosterStrip agents={agents} />
+
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -162,6 +219,7 @@ export function OperationsScreen() {
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {agents.map((agent, index) => (
                 <motion.div
+                  id={`agent-${agent.id}`}
                   key={agent.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}

@@ -22,6 +22,16 @@ const PYTHON_SCRIPT = `import json, sqlite3, sys
 db_path = sys.argv[1]
 limit = int(sys.argv[2])
 
+def safe_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except Exception:
+        return str(value)
+
 conn = sqlite3.connect("file:" + db_path + "?mode=ro", uri=True)
 conn.row_factory = sqlite3.Row
 cur = conn.cursor()
@@ -100,12 +110,14 @@ if session_id and "messages" in table_names:
                                         sub = []
                                         for v in val:
                                             if isinstance(v, dict) and v.get("type") == "text":
-                                                sub.append(v.get("text", ""))
-                                        val = "\\n".join(sub)
-                                    parts.append(str(val)[:400])
+                                                sub.append(safe_text(v.get("text", "")))
+                                            else:
+                                                sub.append(safe_text(v))
+                                        val = "\\n".join(x for x in sub if x)
+                                    parts.append(safe_text(val)[:800])
                             text = "\\n".join(p for p in parts if p)
                         elif isinstance(parsed, dict):
-                            text = parsed.get("text") or parsed.get("content") or content
+                            text = safe_text(parsed.get("text") or parsed.get("content") or parsed)
                         else:
                             text = content
                     except Exception:
@@ -113,7 +125,7 @@ if session_id and "messages" in table_names:
                 else:
                     text = content
             else:
-                text = str(content) if content is not None else ""
+                text = safe_text(content)
             ts = None
             if ts_col:
                 raw_ts = r["ts"]

@@ -43,6 +43,13 @@ export const MOBILE_HAMBURGER_NAV_ITEMS = [
     match: (p: string) => p.startsWith('/dashboard'),
   },
   {
+    id: 'vt-capital',
+    label: 'VT Capital',
+    icon: Building01Icon,
+    to: '/vt-capital',
+    match: (p: string) => p === '/vt-capital',
+  },
+  {
     id: 'playground',
     label: 'HermesWorld',
     icon: Castle02Icon,

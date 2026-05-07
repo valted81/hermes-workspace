@@ -496,6 +496,15 @@ export async function getSkillCategories(): Promise<unknown> {
 // ── Config ───────────────────────────────────────────────────────
 
 export async function getConfig(): Promise<ClaudeConfig> {
+  await ensureGatewayProbed()
+  if (getCapabilities().dashboard.available) {
+    const res = await dashboardFetch('/api/config')
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Hermes Agent dashboard /api/config: ${res.status} ${body}`)
+    }
+    return res.json() as Promise<ClaudeConfig>
+  }
   return claudeGet<ClaudeConfig>('/api/config')
 }
 

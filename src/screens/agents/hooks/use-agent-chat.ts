@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { SessionHistoryMessage } from '@/lib/gateway-api'
 import {
   fetchSessionHistory,
   sendToSession,
-  type SessionHistoryMessage,
 } from '@/lib/gateway-api'
 
 export type OperationsChatMessage = {
@@ -13,15 +13,36 @@ export type OperationsChatMessage = {
   timestamp?: number
 }
 
+function safeDisplayValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value == null) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
 function extractMessageText(message: SessionHistoryMessage): string {
   if (typeof message.content === 'string') return message.content
   if (Array.isArray(message.content)) {
     return message.content
-      .filter((part) => !part.type || part.type === 'text')
-      .map((part) => part.text ?? '')
+      .map((part) => {
+        if (typeof part !== 'object') return safeDisplayValue(part)
+        if (!part.type || part.type === 'text') {
+          return typeof part.text === 'string' ? part.text : safeDisplayValue(part)
+        }
+        if (part.type === 'tool_use') {
+          const name = typeof part.name === 'string' ? part.name : 'unknown'
+          return `[tool:${name}]`
+        }
+        if (part.type === 'tool_result') return safeDisplayValue(part.content)
+        return safeDisplayValue(part)
+      })
+      .filter(Boolean)
       .join('\n')
   }
-  return ''
+  return safeDisplayValue(message.content)
 }
 
 function normalizeMessage(
@@ -57,7 +78,7 @@ export function useAgentChat(sessionKey: string) {
         const res = await fetch(`/api/history?sessionKey=${encodeURIComponent(sessionKey)}&limit=50`)
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data.messages)) return data.messages as SessionHistoryMessage[]
+          if (Array.isArray(data.messages)) return data.messages as Array<SessionHistoryMessage>
         }
       } catch {
         // fall through
