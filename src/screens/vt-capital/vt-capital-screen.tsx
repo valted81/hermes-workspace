@@ -1903,6 +1903,9 @@ export function VtCapitalScreen() {
                   const coverage = backtest?.coverage as
                     | Record<string, unknown>
                     | undefined
+                  const simulation = backtest?.simulation as
+                    | Record<string, unknown>
+                    | undefined
                   return (
                     <div
                       key={strategy.id}
@@ -1947,6 +1950,25 @@ export function VtCapitalScreen() {
                             : 'non lanciato'}
                         </span>
                         <span>runner: {String(backtest?.status ?? '—')}</span>
+                        <span>
+                          trade:{' '}
+                          {simulation
+                            ? `${String(simulation.trades ?? 0)} · ${String(simulation.status ?? '—')}`
+                            : '—'}
+                        </span>
+                        <span>
+                          expectancy:{' '}
+                          {simulation?.avg_expectancy_pct === null ||
+                          simulation?.avg_expectancy_pct === undefined
+                            ? '—'
+                            : `${String(simulation.avg_expectancy_pct)}%`}
+                        </span>
+                        <span>
+                          costi:{' '}
+                          {simulation?.cost_bps_roundtrip
+                            ? `${String(simulation.cost_bps_roundtrip)} bps rt`
+                            : '—'}
+                        </span>
                         <span>{strategy.guardrail}</span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
