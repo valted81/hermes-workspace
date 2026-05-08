@@ -389,6 +389,44 @@ const payload = {
         broker_calls_allowed: false,
       },
     ],
+    forwardHistory: {
+      candidate_count: 1,
+      eligible_count: 0,
+      thresholds: {
+        min_observations: 3,
+        min_sample: 10,
+        max_drawdown_pct: 10,
+      },
+      candidates: [
+        {
+          candidate_key: 'intraday-breakout-fast:SOL:35m:breakout:fe0b6add4327',
+          strategy_id: 'intraday-breakout-fast',
+          strategy_name: 'Fast Breakout',
+          symbol: 'SOL',
+          timeframe: '35m',
+          observation_count: 1,
+          total_sample: 14,
+          average_score_pct: 0.1174,
+          worst_drawdown_pct: 2.4491,
+          recommendation: 'KEEP_FORWARD_OBSERVE',
+          manual_gate: {
+            status: 'waiting_more_evidence',
+            reason_code: 'forward_observations_below_minimum',
+            violations: ['forward_observations_below_minimum'],
+            paper_promoted: false,
+            execution_enabled: false,
+            broker_calls_allowed: false,
+          },
+        },
+      ],
+      safety: {
+        observe_only: true,
+        manual_review_required: true,
+        paper_promoted: false,
+        execution_enabled: false,
+        broker_calls_allowed: false,
+      },
+    },
     safety: {
       observeOnly: true,
       executionEnabled: false,
@@ -715,6 +753,11 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('Forward Performance')
     expect(container.textContent).toContain('1 osservati')
     expect(container.textContent).toContain('Perf filepresente')
+    expect(container.textContent).toContain('Storico forward + gate manuale')
+    expect(container.textContent).toContain('0 eligible')
+    expect(container.textContent).toContain('KEEP_FORWARD_OBSERVE')
+    expect(container.textContent).toContain('waiting_more_evidence')
+    expect(container.textContent).toContain('forward_observations_below_minimum')
     expect(container.textContent).toContain('score forward: +0.12%')
     expect(container.textContent).toContain('win-rate: +57.14%')
     expect(container.textContent).toContain('broker off')

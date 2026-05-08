@@ -820,6 +820,18 @@ export function readForwardPerformance(): JsonRecord {
   const logStat = safeStat(VT_FORWARD_PERFORMANCE_LOG_PATH)
   const raw = readJsonFile(VT_FORWARD_PERFORMANCE_PATH)
   const observations = Array.isArray(raw?.observations) ? raw.observations : []
+  const forwardHistory =
+    raw?.forward_history &&
+    typeof raw.forward_history === 'object' &&
+    !Array.isArray(raw.forward_history)
+      ? (raw.forward_history as JsonRecord)
+      : {
+          candidate_count: 0,
+          eligible_count: 0,
+          candidates: [],
+          thresholds: {},
+          safety: {},
+        }
   const safety =
     raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
       ? (raw.safety as JsonRecord)
@@ -847,6 +859,7 @@ export function readForwardPerformance(): JsonRecord {
         ? raw.observed_count
         : observations.length,
     observations,
+    forwardHistory,
     safety: {
       observeOnly: safety.observe_only !== false,
       executionEnabled: safety.execution_enabled === true,

@@ -183,6 +183,14 @@ describe('VT Capital backtest data API summary', () => {
       paper_promoted: false,
       broker_calls_allowed: false,
     })
+    expect(summary.forwardHistory).toMatchObject({
+      safety: {
+        manual_review_required: true,
+        paper_promoted: false,
+        execution_enabled: false,
+        broker_calls_allowed: false,
+      },
+    })
   })
 
   it('summarizes append-only strategy test logs for the cockpit log tab', () => {

@@ -218,6 +218,13 @@ type ForwardPerformancePayload = {
   activeCount: number
   observedCount: number
   observations: Array<Record<string, unknown>>
+  forwardHistory?: {
+    candidate_count?: number
+    eligible_count?: number
+    candidates?: Array<Record<string, unknown>>
+    thresholds?: Record<string, unknown>
+    safety?: Record<string, unknown>
+  }
   safety: {
     observeOnly: boolean
     executionEnabled: boolean
@@ -2509,6 +2516,67 @@ export function VtCapitalScreen() {
                         : 'good'
                     }
                   />
+                </div>
+                <div className="mt-3 rounded-lg border p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-ink">Storico forward + gate manuale</div>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                      {Number(data.forwardPerformance?.forwardHistory?.eligible_count ?? 0)} eligible
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                    <span>
+                      candidati: {String(data.forwardPerformance?.forwardHistory?.candidate_count ?? 0)}
+                    </span>
+                    <span>
+                      min obs:{' '}
+                      {String(data.forwardPerformance?.forwardHistory?.thresholds?.min_observations ?? 3)}
+                    </span>
+                    <span>
+                      max DD:{' '}
+                      {formatPct(Number(data.forwardPerformance?.forwardHistory?.thresholds?.max_drawdown_pct ?? 10))}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {(data.forwardPerformance?.forwardHistory?.candidates ?? []).length ? (
+                      (data.forwardPerformance?.forwardHistory?.candidates ?? []).slice(0, 4).map((candidate, index) => {
+                        const manualGate = asRecord(candidate.manual_gate)
+                        const avgScore = Number(candidate.average_score_pct)
+                        const worstDrawdown = Number(candidate.worst_drawdown_pct)
+                        return (
+                          <div
+                            key={`${String(candidate.candidate_key ?? 'forward-history')}-${index}`}
+                            className="rounded-md border px-2 py-1"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold text-ink">
+                                {String(candidate.strategy_name ?? candidate.strategy_id ?? 'strategia')} ·{' '}
+                                {String(candidate.symbol ?? 'asset')} {String(candidate.timeframe ?? 'tf')}
+                              </span>
+                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase">
+                                {String(candidate.recommendation ?? 'KEEP_FORWARD_OBSERVE')}
+                              </span>
+                            </div>
+                            <div className="mt-1 grid gap-1 text-[11px] sm:grid-cols-3">
+                              <span>obs: {String(candidate.observation_count ?? 0)}</span>
+                              <span>sample: {String(candidate.total_sample ?? 0)}</span>
+                              <span>avg score: {Number.isFinite(avgScore) ? formatPct(avgScore) : '—'}</span>
+                              <span>worst DD: {Number.isFinite(worstDrawdown) ? formatPct(worstDrawdown) : '—'}</span>
+                              <span>gate: {String(manualGate?.status ?? '—')}</span>
+                              <span>paper: false · manual review</span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-muted">
+                              reason: {String(manualGate?.reason_code ?? '—')} · broker off · execution=false
+                            </div>
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="text-[11px] text-muted">
+                        Nessuno storico forward sufficiente. Il gate richiede più osservazioni prima di qualsiasi review manuale.
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 space-y-2">
                   {(data.forwardPerformance?.observations ?? []).length ? (
