@@ -101,6 +101,22 @@ const VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/runtime/manual-approval-actions.jsonl',
 )
+const VT_RUNTIME_SIGNALS_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/signals.json',
+)
+const VT_RUNTIME_SIGNALS_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/signals.jsonl',
+)
+const VT_RUNTIME_PAPER_POSITIONS_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/paper-positions.json',
+)
+const VT_RUNTIME_PAPER_POSITIONS_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/paper-positions.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -1063,6 +1079,49 @@ export function readRuntimeOrderProposals(): JsonRecord {
   }
 }
 
+export function readRuntimeSignals(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_SIGNALS_PATH)
+  const logStat = safeStat(VT_RUNTIME_SIGNALS_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_SIGNALS_PATH)
+  const signals = Array.isArray(raw?.signals) ? raw.signals : []
+  const actionableSignals = Array.isArray(raw?.actionable_signals)
+    ? raw.actionable_signals
+    : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_SIGNALS_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_signal_scanner_observe_only',
+    desk: typeof raw?.desk === 'string' ? raw.desk : null,
+    signalCount:
+      typeof raw?.signal_count === 'number' ? raw.signal_count : signals.length,
+    actionableCount:
+      typeof raw?.actionable_count === 'number'
+        ? raw.actionable_count
+        : actionableSignals.length,
+    activeCount: typeof raw?.active_count === 'number' ? raw.active_count : 0,
+    signals,
+    actionableSignals,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      executionEnabled: safety.execution_enabled === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+    },
+  }
+}
+
 export function readRuntimeGuardianReview(): JsonRecord {
   const stat = safeStat(VT_RUNTIME_GUARDIAN_REVIEW_PATH)
   const logStat = safeStat(VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH)
@@ -1108,6 +1167,48 @@ export function readRuntimeGuardianReview(): JsonRecord {
       executionEnabled: safety.execution_enabled === true,
       paperPromoted: safety.paper_promoted === true,
       brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
+export function readRuntimePaperPositions(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_PAPER_POSITIONS_PATH)
+  const logStat = safeStat(VT_RUNTIME_PAPER_POSITIONS_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_PAPER_POSITIONS_PATH)
+  const positions = Array.isArray(raw?.positions) ? raw.positions : []
+  const events = Array.isArray(raw?.events) ? raw.events : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_PAPER_POSITIONS_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_paper_positions_observe_only',
+    positionCount:
+      typeof raw?.position_count === 'number'
+        ? raw.position_count
+        : positions.length,
+    openCount: typeof raw?.open_count === 'number' ? raw.open_count : 0,
+    openedEventCount:
+      typeof raw?.opened_event_count === 'number'
+        ? raw.opened_event_count
+        : events.length,
+    positions,
+    events,
+    safety: {
+      paperSimulatedOnly: safety.paper_simulated_only !== false,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+      executionEnabled: safety.execution_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
     },
   }
 }
@@ -1329,6 +1430,10 @@ export const Route = createFileRoute('/api/vt-capital')({
               VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_PATH,
             runtimeManualApprovalActionsLog:
               VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH,
+            runtimeSignals: VT_RUNTIME_SIGNALS_PATH,
+            runtimeSignalsLog: VT_RUNTIME_SIGNALS_LOG_PATH,
+            runtimePaperPositions: VT_RUNTIME_PAPER_POSITIONS_PATH,
+            runtimePaperPositionsLog: VT_RUNTIME_PAPER_POSITIONS_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -1357,6 +1462,8 @@ export const Route = createFileRoute('/api/vt-capital')({
           runtimeGuardianReview: readRuntimeGuardianReview(),
           runtimeManualApproval: readRuntimeManualApproval(),
           runtimeManualApprovalActions: readRuntimeManualApprovalActions(),
+          runtimeSignals: readRuntimeSignals(),
+          runtimePaperPositions: readRuntimePaperPositions(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,

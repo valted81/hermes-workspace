@@ -343,6 +343,39 @@ type RuntimeManualApprovalActionsPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeSignalsPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  desk: string | null
+  signalCount: number
+  actionableCount: number
+  activeCount: number
+  signals: Array<Record<string, unknown>>
+  actionableSignals: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
+type RuntimePaperPositionsPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  positionCount: number
+  openCount: number
+  openedEventCount: number
+  positions: Array<Record<string, unknown>>
+  events: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -405,6 +438,8 @@ type VtPayload = {
   runtimeGuardianReview?: RuntimeGuardianReviewPayload
   runtimeManualApproval?: RuntimeManualApprovalPayload
   runtimeManualApprovalActions?: RuntimeManualApprovalActionsPayload
+  runtimeSignals?: RuntimeSignalsPayload
+  runtimePaperPositions?: RuntimePaperPositionsPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1472,15 +1507,26 @@ export function VtCapitalScreen() {
         next: 'Accumulo storico forward su più giorni prima di proporre paper observe.',
       },
       {
+        id: 'runtime-signal-scanner',
+        title: 'Runtime Signal Scanner operativo',
+        group: 'queue',
+        status: (data?.runtimeSignals?.signalCount ?? 0) > 0 ? 'observe' : 'missing',
+        summary: `${data?.runtimeSignals?.activeCount ?? 0} attivi · ${data?.runtimeSignals?.actionableCount ?? 0} actionable · ${data?.runtimeSignals?.signalCount ?? 0} scan.`,
+        does: 'Scansiona candele locali BTC/ETH/SOL e genera segnali runtime separati dal Lab.',
+        input: 'data/desks/desk-a-swing, timeframe 15m/1h/4h, indicatori EMA/RSI/ATR/volume.',
+        output: 'data/runtime/signals.json/jsonl, observe-only e broker off.',
+        next: 'Aggiungere macro/news reali e posizioni aperte come fattori nel Concilium operativo.',
+      },
+      {
         id: 'runtime-concilium',
         title: 'Runtime Concilium operativo',
         group: 'queue',
         status: (data?.runtimeConcilium?.decisionCount ?? 0) > 0 ? 'observe' : 'missing',
-        summary: `${data?.runtimeConcilium?.decisionCount ?? 0} decisioni · usa profili agenti come ruoli.`,
-        does: 'Legge i packet manual-review e decide WATCH/MANUAL_REVIEW/PAPER_OBSERVE in modo read-only.',
-        input: 'Manual review packets e ruoli tradinganalyst/macronewsscout/riskmanager/strategyreviewer/operationswatcher.',
+        summary: `${data?.runtimeConcilium?.decisionCount ?? 0} decisioni · ${(data?.runtimeConcilium?.decisionCounts ?? {})['PAPER_OBSERVE'] ?? 0} PAPER_OBSERVE.`,
+        does: 'Valuta segnali runtime e packet manual-review con ruoli tradinganalyst/macronewsscout/riskmanager/strategyreviewer/operationswatcher.',
+        input: 'Runtime signals operativi + manual review packets; non usa il Concilium interno del Lab per aprire posizioni.',
         output: 'data/runtime/concilium-decisions.json/jsonl.',
-        next: 'Far entrare segnali runtime reali, non solo packet da AutoResearch.',
+        next: 'Rendere macro/news scout meno neutrale collegando fonte eventi/news.',
       },
       {
         id: 'order-proposals-runtime',
@@ -1527,15 +1573,26 @@ export function VtCapitalScreen() {
         next: 'Quando Valerio approva una proposal, usare questo gate prima del paper/demo observe.',
       },
       {
+        id: 'paper-positions-runtime',
+        title: 'Posizioni paper locali',
+        group: 'queue',
+        status: (data?.runtimePaperPositions?.openCount ?? 0) > 0 ? 'demo' : 'blocked',
+        summary: `${data?.runtimePaperPositions?.openCount ?? 0} aperte · ${data?.runtimePaperPositions?.positionCount ?? 0} totali · broker off.`,
+        does: 'Apre solo posizioni simulate locali dopo Concilium + Guardian approvati; non invia ordini.',
+        input: 'Guardian review APPROVED + order proposal canonica.',
+        output: 'data/runtime/paper-positions.json/jsonl con PnL mark-to-market locale.',
+        next: 'Aggiungere chiusura automatica simulata su stop/take-profit/invalidation.',
+      },
+      {
         id: 'missing-paper-bridge',
-        title: 'Ponte paper/demo controllato',
+        title: 'Ponte demo broker controllato',
         group: 'missing',
         status: 'blocked',
-        summary: 'Non ancora attivo: serve approvazione manuale e Guardian check.',
-        does: 'Sarà il passaggio da proposta ordine a paper/demo observe, non a live trading.',
-        input: 'Order proposal approvata da Valerio + Guardian Risk.',
-        output: 'Trade paper/demo osservabile con PnL, invalidation e audit.',
-        next: 'Implementare Guardian review delle proposal runtime come prossimo step sicuro.',
+        summary: 'Non ancora attivo: il paper locale gira, ma il broker demo resta spento.',
+        does: 'Sarà il passaggio da posizione paper locale a ordine demo broker, non a live trading.',
+        input: 'Order proposal approvata da Guardian + consenso esplicito Valerio + feature flag demo.',
+        output: 'Ordine demo osservabile con PnL, invalidation e audit.',
+        next: 'Prima chiudere paper locale con stop/take-profit; poi decidere se abilitare broker demo.',
       },
     ]
   }, [data, performance, strategyCounts])
@@ -1556,7 +1613,9 @@ export function VtCapitalScreen() {
           `AutoResearch lab: ${data?.autoresearch?.enabled ? 'attivo' : 'spento'} · ${data?.autoresearch?.mode ?? 'n/d'}`,
           `Backtest/log test: ${data?.strategyTestLogs?.eventCount ?? 0} eventi salvati`,
           `Forward observe: ${data?.forwardTestQueue?.activeCount ?? 0} candidato/i in coda`,
+          `Runtime signals: ${data?.runtimeSignals?.activeCount ?? 0} attivi · ${data?.runtimeSignals?.actionableCount ?? 0} actionable`,
           `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
+          `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte, broker off`,
         ],
       },
       {
@@ -1576,7 +1635,7 @@ export function VtCapitalScreen() {
         title: 'Manca per trading reale',
         tone: 'danger' as const,
         items: [
-          'paper/demo observe alimentato dal Concilium operativo + Guardian',
+          'broker demo controllato con feature flag esplicito',
           'DCA/investimenti separati dal trading intraday',
         ],
       },
@@ -2356,6 +2415,16 @@ export function VtCapitalScreen() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Metric
+                  label="Segnali attivi"
+                  value={`${data.runtimeSignals?.activeCount ?? 0}/${data.runtimeSignals?.signalCount ?? 0}`}
+                  tone={(data.runtimeSignals?.activeCount ?? 0) > 0 ? 'warn' : 'neutral'}
+                />
+                <Metric
+                  label="Paper posizioni"
+                  value={data.runtimePaperPositions?.openCount ?? 0}
+                  tone={(data.runtimePaperPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'}
+                />
+                <Metric
                   label="Decisioni"
                   value={data.runtimeConcilium?.decisionCount ?? 0}
                   tone={
@@ -2398,9 +2467,9 @@ export function VtCapitalScreen() {
                   borderColor: 'var(--theme-border)',
                 }}
               >
-                Ponte operativo: manual review → Concilium runtime → order
-                proposal draft → Guardian. Oggi produce solo
-                WATCH/MANUAL_REVIEW; nessun ordine viene inviato.
+                Ponte operativo: segnali runtime → Concilium operativo → order
+                proposal → Guardian → posizione paper locale. Broker sempre off:
+                nessun ordine reale viene inviato.
               </div>
               <div className="mt-3 space-y-2">
                 {(data.runtimeConcilium?.decisions ?? [])
