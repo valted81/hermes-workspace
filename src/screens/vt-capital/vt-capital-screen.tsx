@@ -576,7 +576,9 @@ function formatConciliumRole(role: unknown): string {
 }
 
 function formatViolations(value: unknown): string {
-  return Array.isArray(value) ? value.map(String).join(', ') : String(value ?? '—')
+  return Array.isArray(value)
+    ? value.map(String).join(', ')
+    : String(value ?? '—')
 }
 
 function formatMoney(value: number | null | undefined): string {
@@ -2354,9 +2356,7 @@ export function VtCapitalScreen() {
                       ? formatPct(score)
                       : '—'
                     const conciliumReview = asRecord(log.concilium_review)
-                    const conciliumRoles = Array.isArray(
-                      conciliumReview?.roles,
-                    )
+                    const conciliumRoles = Array.isArray(conciliumReview?.roles)
                       ? conciliumReview.roles
                       : []
                     const riskGate = asRecord(log.risk_gate)
@@ -2404,29 +2404,27 @@ export function VtCapitalScreen() {
                               <span>Review Concilium</span>
                               <span>
                                 Concilium:{' '}
-                                {String(
-                                  conciliumReview.recommendation ?? '—',
-                                )}{' '}
+                                {String(conciliumReview.recommendation ?? '—')}{' '}
                                 · conf{' '}
                                 {String(conciliumReview.confidence ?? '—')}
                               </span>
                               <span className="text-muted">
                                 reason:{' '}
-                                {String(
-                                  conciliumReview.reason_code ?? '—',
-                                )}
+                                {String(conciliumReview.reason_code ?? '—')}
                               </span>
                             </div>
                             {conciliumRoles.length ? (
                               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted">
-                                {conciliumRoles.slice(0, 5).map((role, roleIndex) => (
-                                  <span
-                                    key={`${String(log.strategy_id ?? 'strategy')}-role-${roleIndex}`}
-                                    className="rounded-full border px-2 py-0.5"
-                                  >
-                                    {formatConciliumRole(role)}
-                                  </span>
-                                ))}
+                                {conciliumRoles
+                                  .slice(0, 5)
+                                  .map((role, roleIndex) => (
+                                    <span
+                                      key={`${String(log.strategy_id ?? 'strategy')}-role-${roleIndex}`}
+                                      className="rounded-full border px-2 py-0.5"
+                                    >
+                                      {formatConciliumRole(role)}
+                                    </span>
+                                  ))}
                               </div>
                             ) : null}
                             {riskGate ? (
