@@ -2520,6 +2520,8 @@ export function VtCapitalScreen() {
                           </span>
                         </div>
                         <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                          <span>setup: {String(position.setup ?? '—')}</span>
+                          <span>tf: {String(position.timeframe ?? position.last_candle_timeframe ?? '—')}</span>
                           <span>entry: {String(position.entry_price ?? '—')}</span>
                           <span>last: {String(position.last_price ?? '—')}</span>
                           <span>PnL: {String(position.unrealized_pnl_pct ?? '—')}%</span>
