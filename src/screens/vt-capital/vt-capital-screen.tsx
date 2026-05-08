@@ -311,6 +311,22 @@ type RuntimeGuardianReviewPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeManualApprovalPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  decisionCount: number
+  requestCount: number
+  blockedCount: number
+  requests: Array<Record<string, unknown>>
+  blockedDecisions: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -371,6 +387,7 @@ type VtPayload = {
   runtimeConcilium?: RuntimeConciliumPayload
   runtimeOrderProposals?: RuntimeOrderProposalsPayload
   runtimeGuardianReview?: RuntimeGuardianReviewPayload
+  runtimeManualApproval?: RuntimeManualApprovalPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1460,6 +1477,17 @@ export function VtCapitalScreen() {
         next: 'Collegare Guardian Risk check read-only alle proposal, senza broker.',
       },
       {
+        id: 'manual-approval-runtime',
+        title: 'Manual Approval Gate',
+        group: 'queue',
+        status: (data?.runtimeManualApproval?.requestCount ?? 0) > 0 ? 'observe' : 'blocked',
+        summary: `${data?.runtimeManualApproval?.requestCount ?? 0} richieste · ${data?.runtimeManualApproval?.blockedCount ?? 0} non pronte.`,
+        does: 'Prepara le richieste esplicite per Valerio quando il Runtime Concilium dice MANUAL_REVIEW.',
+        input: 'Decisioni Runtime Concilium già mature per review umana.',
+        output: 'data/runtime/manual-approval-requests.json/jsonl, nessuna promozione automatica.',
+        next: 'Aggiungere un controllo UI protetto per approvare solo PAPER_OBSERVE, mai live.',
+      },
+      {
         id: 'guardian-review-runtime',
         title: 'Guardian Review read-only',
         group: 'queue',
@@ -1508,6 +1536,7 @@ export function VtCapitalScreen() {
         tone: 'warn' as const,
         items: [
           `Manual review: ${data?.manualPaperReview?.eligibleCount ?? 0} pronti · ${data?.manualPaperReview?.waitingCount ?? 0} in attesa`,
+          `Approval Gate: ${data?.runtimeManualApproval?.requestCount ?? 0} richieste · ${data?.runtimeManualApproval?.blockedCount ?? 0} bloccate`,
           `Order proposal: ${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte · ${data?.runtimeOrderProposals?.heldCount ?? 0} trattenute`,
           `Guardian review: ${data?.runtimeGuardianReview?.reviewCount ?? 0} controlli · ${data?.runtimeGuardianReview?.heldCount ?? 0} in attesa`,
           `Execution flag: ${data?.plugin.executionEnabled ? 'ON - da verificare' : 'OFF'}`,
@@ -1518,9 +1547,8 @@ export function VtCapitalScreen() {
         title: 'Manca per trading reale',
         tone: 'danger' as const,
         items: [
-          'approvazione manuale Valerio → PAPER_OBSERVE',
-          'Guardian check collegato alle proposal runtime',
-          'paper/demo observe alimentato dal Concilium operativo',
+          'pulsante/azione protetta Valerio per approvare PAPER_OBSERVE',
+          'paper/demo observe alimentato dal Concilium operativo + Guardian',
           'DCA/investimenti separati dal trading intraday',
         ],
       },
@@ -3007,6 +3035,58 @@ export function VtCapitalScreen() {
                       <div className="text-[11px] text-muted">
                         Nessun packet manuale: serve prima storico forward dal
                         gate.
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-ink">
+                      Manual Approval Gate
+                    </div>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                      {Number(data.runtimeManualApproval?.requestCount ?? 0)} richieste
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                    <span>
+                      decisioni: {String(data.runtimeManualApproval?.decisionCount ?? 0)}
+                    </span>
+                    <span>
+                      bloccate: {String(data.runtimeManualApproval?.blockedCount ?? 0)}
+                    </span>
+                    <span>
+                      safety:{' '}
+                      {data.runtimeManualApproval?.safety?.brokerCallsAllowed
+                        ? 'broker on'
+                        : 'broker off'}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {(data.runtimeManualApproval?.requests ?? []).length ? (
+                      (data.runtimeManualApproval?.requests ?? [])
+                        .slice(0, 4)
+                        .map((request, index) => (
+                          <div
+                            key={`${String(request.request_id ?? 'manual-approval')}-${index}`}
+                            className="rounded-md border px-2 py-1"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold text-ink">
+                                {String(request.strategy_name ?? request.strategy_id ?? 'strategia')} · {String(request.symbol ?? 'asset')} {String(request.timeframe ?? 'tf')}
+                              </span>
+                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase">
+                                {String(request.status ?? 'WAITING_VALERIO_APPROVAL')}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-muted">
+                              scope: {String(request.approval_scope ?? 'paper_observe_only')} · azione: {String(request.requested_action ?? 'APPROVE_PAPER_OBSERVE_CANDIDATE')} · execution=false
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-[11px] text-muted">
+                        Nessuna richiesta approvabile ora. Il sistema sta bloccando perché il Concilium runtime non ha ancora candidato in MANUAL_REVIEW.
                       </div>
                     )}
                   </div>
