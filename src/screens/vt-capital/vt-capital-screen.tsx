@@ -327,6 +327,22 @@ type RuntimeManualApprovalPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeManualApprovalActionsPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  requestCount: number
+  approvedCount: number
+  blockedCount: number
+  approvals: Array<Record<string, unknown>>
+  blockedRequests: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -388,6 +404,7 @@ type VtPayload = {
   runtimeOrderProposals?: RuntimeOrderProposalsPayload
   runtimeGuardianReview?: RuntimeGuardianReviewPayload
   runtimeManualApproval?: RuntimeManualApprovalPayload
+  runtimeManualApprovalActions?: RuntimeManualApprovalActionsPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1485,7 +1502,18 @@ export function VtCapitalScreen() {
         does: 'Prepara le richieste esplicite per Valerio quando il Runtime Concilium dice MANUAL_REVIEW.',
         input: 'Decisioni Runtime Concilium già mature per review umana.',
         output: 'data/runtime/manual-approval-requests.json/jsonl, nessuna promozione automatica.',
-        next: 'Aggiungere un controllo UI protetto per approvare solo PAPER_OBSERVE, mai live.',
+        next: 'Azione protetta PAPER_OBSERVE solo se Valerio approva; mai live.',
+      },
+      {
+        id: 'manual-approval-actions-runtime',
+        title: 'Azione approvazione protetta',
+        group: 'queue',
+        status: (data?.runtimeManualApprovalActions?.approvedCount ?? 0) > 0 ? 'observe' : 'blocked',
+        summary: `${data?.runtimeManualApprovalActions?.approvedCount ?? 0} approvate · ${data?.runtimeManualApprovalActions?.blockedCount ?? 0} in attesa azione.`,
+        does: 'Registra solo un consenso esplicito PAPER_OBSERVE; non promuove, non approva rischio e non chiama broker.',
+        input: 'Richieste WAITING_VALERIO_APPROVAL dal Manual Approval Gate.',
+        output: 'data/runtime/manual-approval-actions.json/jsonl con override PAPER_OBSERVE protetto.',
+        next: 'Dopo approvazione, Order Proposal legge questo file e passa comunque dal Guardian.',
       },
       {
         id: 'guardian-review-runtime',
@@ -1537,6 +1565,7 @@ export function VtCapitalScreen() {
         items: [
           `Manual review: ${data?.manualPaperReview?.eligibleCount ?? 0} pronti · ${data?.manualPaperReview?.waitingCount ?? 0} in attesa`,
           `Approval Gate: ${data?.runtimeManualApproval?.requestCount ?? 0} richieste · ${data?.runtimeManualApproval?.blockedCount ?? 0} bloccate`,
+          `Azione Valerio: ${data?.runtimeManualApprovalActions?.approvedCount ?? 0} approvate · ${data?.runtimeManualApprovalActions?.blockedCount ?? 0} in attesa`,
           `Order proposal: ${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte · ${data?.runtimeOrderProposals?.heldCount ?? 0} trattenute`,
           `Guardian review: ${data?.runtimeGuardianReview?.reviewCount ?? 0} controlli · ${data?.runtimeGuardianReview?.heldCount ?? 0} in attesa`,
           `Execution flag: ${data?.plugin.executionEnabled ? 'ON - da verificare' : 'OFF'}`,
@@ -1547,7 +1576,6 @@ export function VtCapitalScreen() {
         title: 'Manca per trading reale',
         tone: 'danger' as const,
         items: [
-          'pulsante/azione protetta Valerio per approvare PAPER_OBSERVE',
           'paper/demo observe alimentato dal Concilium operativo + Guardian',
           'DCA/investimenti separati dal trading intraday',
         ],
@@ -1573,6 +1601,7 @@ export function VtCapitalScreen() {
     const maxDrawdown = safeNumber(thresholds?.max_drawdown_pct)
     const latestDecision = asRecord(data?.runtimeConcilium?.decisions?.[0])
     const approvalBlock = asRecord(data?.runtimeManualApproval?.blockedDecisions?.[0])
+    const approvalActionBlock = asRecord(data?.runtimeManualApprovalActions?.blockedRequests?.[0])
     const proposalHold = asRecord(data?.runtimeOrderProposals?.heldDecisions?.[0])
     const guardianHold = asRecord(data?.runtimeGuardianReview?.heldDecisions?.[0])
 
@@ -1612,6 +1641,15 @@ export function VtCapitalScreen() {
           approvalBlock != null
             ? `non pronto: ${String(approvalBlock.reason_code ?? '—')}`
             : 'quando appare qui, serve approvazione esplicita PAPER_OBSERVE',
+      },
+      {
+        label: 'Azione manuale protetta',
+        status: (data?.runtimeManualApprovalActions?.approvedCount ?? 0) > 0 ? 'ok' : 'bloccato',
+        value: `${data?.runtimeManualApprovalActions?.approvedCount ?? 0} approvate`,
+        detail:
+          (data?.runtimeManualApprovalActions?.blockedCount ?? 0) > 0
+            ? `${data?.runtimeManualApprovalActions?.blockedCount ?? 0} richieste aspettano azione Valerio`
+            : 'nessuna approval PAPER_OBSERVE registrata',
       },
       {
         label: 'Order proposal',
@@ -3235,6 +3273,33 @@ export function VtCapitalScreen() {
                         Nessuna richiesta approvabile ora. Il sistema sta bloccando perché il Concilium runtime non ha ancora candidato in MANUAL_REVIEW.
                       </div>
                     )}
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-ink">
+                      Azione manuale protetta
+                    </div>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                      {Number(data.runtimeManualApprovalActions?.approvedCount ?? 0)} approvate
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                    <span>
+                      richieste: {String(data.runtimeManualApprovalActions?.requestCount ?? 0)}
+                    </span>
+                    <span>
+                      attesa azione: {String(data.runtimeManualApprovalActions?.blockedCount ?? 0)}
+                    </span>
+                    <span>
+                      broker:{' '}
+                      {data.runtimeManualApprovalActions?.safety?.brokerCallsAllowed
+                        ? 'on'
+                        : 'off'}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-muted">
+                    Qui comparirà solo un consenso esplicito di Valerio per PAPER_OBSERVE. Non approva rischio, non promuove paper, non chiama broker.
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">

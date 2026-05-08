@@ -93,6 +93,14 @@ const VT_RUNTIME_MANUAL_APPROVAL_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/runtime/manual-approval-requests.jsonl',
 )
+const VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/manual-approval-actions.json',
+)
+const VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/manual-approval-actions.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -1153,6 +1161,53 @@ export function readRuntimeManualApproval(): JsonRecord {
   }
 }
 
+export function readRuntimeManualApprovalActions(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_PATH)
+  const logStat = safeStat(VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_PATH)
+  const approvals = Array.isArray(raw?.approvals) ? raw.approvals : []
+  const blockedRequests = Array.isArray(raw?.blocked_requests)
+    ? raw.blocked_requests
+    : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(
+      VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH,
+    ),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_manual_approval_actions_protected',
+    requestCount:
+      typeof raw?.request_count === 'number' ? raw.request_count : approvals.length + blockedRequests.length,
+    approvedCount:
+      typeof raw?.approved_count === 'number' ? raw.approved_count : approvals.length,
+    blockedCount:
+      typeof raw?.blocked_count === 'number' ? raw.blocked_count : blockedRequests.length,
+    approvals,
+    blockedRequests,
+    safety: {
+      manualApprovalRequired: safety.manual_approval_required !== false,
+      riskChecked: safety.risk_checked === true,
+      approvedByRisk: safety.approved_by_risk === true,
+      executionEnabled: safety.execution_enabled === true,
+      demoTradingEnabled: safety.demo_trading_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
 export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
@@ -1270,6 +1325,10 @@ export const Route = createFileRoute('/api/vt-capital')({
             runtimeGuardianReviewLog: VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH,
             runtimeManualApproval: VT_RUNTIME_MANUAL_APPROVAL_PATH,
             runtimeManualApprovalLog: VT_RUNTIME_MANUAL_APPROVAL_LOG_PATH,
+            runtimeManualApprovalActions:
+              VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_PATH,
+            runtimeManualApprovalActionsLog:
+              VT_RUNTIME_MANUAL_APPROVAL_ACTIONS_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -1297,6 +1356,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           runtimeOrderProposals: readRuntimeOrderProposals(),
           runtimeGuardianReview: readRuntimeGuardianReview(),
           runtimeManualApproval: readRuntimeManualApproval(),
+          runtimeManualApprovalActions: readRuntimeManualApprovalActions(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,
