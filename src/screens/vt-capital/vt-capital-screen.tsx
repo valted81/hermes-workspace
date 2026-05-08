@@ -206,6 +206,29 @@ type ForwardTestQueuePayload = {
   }
 }
 
+type ForwardPerformancePayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists: boolean
+  logUpdatedAt: number | null
+  logEventCount: number
+  generatedAt: string | null
+  mode: string
+  sourceQueueGeneratedAt: string | null
+  activeCount: number
+  observedCount: number
+  observations: Array<Record<string, unknown>>
+  safety: {
+    observeOnly: boolean
+    executionEnabled: boolean
+    demoTradingEnabled: boolean
+    liveTradingEnabled: boolean
+    registryMutated: boolean
+    paperPromoted: boolean
+    brokerCallsAllowed: boolean
+  }
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -261,6 +284,7 @@ type VtPayload = {
   strategyRegistry?: StrategyRegistryPayload
   backtestResults?: BacktestResultPayload
   forwardTestQueue?: ForwardTestQueuePayload
+  forwardPerformance?: ForwardPerformancePayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -2446,6 +2470,91 @@ export function VtCapitalScreen() {
                     <div className="rounded-lg border p-3 text-xs">
                       Nessun candidato in forward observe. Serve WATCH + risk
                       gate pass.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border p-3 text-sm text-muted">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-ink">Forward Performance</div>
+                    <div className="text-xs">
+                      Replay observe-only sui candidati in queue: misura cosa avrebbe fatto, senza ordini.
+                    </div>
+                  </div>
+                  <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                    {data.forwardPerformance?.observedCount ?? 0} osservati
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <Metric
+                    label="Perf file"
+                    value={data.forwardPerformance?.fileExists ? 'presente' : 'manca'}
+                    tone={data.forwardPerformance?.fileExists ? 'good' : 'warn'}
+                  />
+                  <Metric
+                    label="Eventi perf"
+                    value={data.forwardPerformance?.logEventCount ?? 0}
+                  />
+                  <Metric
+                    label="Safety perf"
+                    value={
+                      data.forwardPerformance?.safety?.brokerCallsAllowed
+                        ? 'broker on'
+                        : 'broker off'
+                    }
+                    tone={
+                      data.forwardPerformance?.safety?.brokerCallsAllowed
+                        ? 'bad'
+                        : 'good'
+                    }
+                  />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(data.forwardPerformance?.observations ?? []).length ? (
+                    (data.forwardPerformance?.observations ?? []).map(
+                      (observation, observationIndex) => {
+                        const equityLast = Number(observation.equity_last)
+                        const score = Number(observation.score_pct)
+                        const drawdown = Number(observation.max_drawdown_pct)
+                        return (
+                          <div
+                            key={`${String(observation.candidate_key ?? 'observation')}-${observationIndex}`}
+                            className="rounded-lg border p-3"
+                            style={{
+                              background: 'var(--theme-card2)',
+                              borderColor: 'var(--theme-border)',
+                            }}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-semibold text-ink">
+                                {String(observation.strategy_name ?? observation.strategy_id ?? 'strategia')}{' '}
+                                · {String(observation.symbol ?? 'asset')}{' '}
+                                {String(observation.timeframe ?? 'tf')}
+                              </div>
+                              <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                                {String(observation.status ?? 'observed')}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid gap-1 text-xs sm:grid-cols-3">
+                              <span>score forward: {Number.isFinite(score) ? formatPct(score) : '—'}</span>
+                              <span>trade/sample: {String(observation.sample ?? '—')}</span>
+                              <span>win-rate: {formatPct(Number(observation.win_rate_pct))}</span>
+                              <span>drawdown: {Number.isFinite(drawdown) ? formatPct(drawdown) : '—'}</span>
+                              <span>equity: {Number.isFinite(equityLast) ? equityLast.toFixed(4) : '—'}</span>
+                              <span>candele: {String(observation.candles ?? '—')}</span>
+                            </div>
+                            <div className="mt-2 text-[11px] text-muted">
+                              interface: {String(observation.interface ?? '—')} · source:{' '}
+                              {String(observation.source ?? '—')} · broker off · paper_promoted=false
+                            </div>
+                          </div>
+                        )
+                      },
+                    )
+                  ) : (
+                    <div className="rounded-lg border p-3 text-xs">
+                      Nessuna performance forward osservata. Serve queue attiva + cron performance.
                     </div>
                   )}
                 </div>

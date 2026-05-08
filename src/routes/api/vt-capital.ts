@@ -45,6 +45,14 @@ const VT_FORWARD_TEST_QUEUE_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/strategies/forward-test-queue.jsonl',
 )
+const VT_FORWARD_PERFORMANCE_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/forward-performance.json',
+)
+const VT_FORWARD_PERFORMANCE_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/forward-performance.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -807,6 +815,50 @@ export function readForwardTestQueue(): JsonRecord {
   }
 }
 
+export function readForwardPerformance(): JsonRecord {
+  const stat = safeStat(VT_FORWARD_PERFORMANCE_PATH)
+  const logStat = safeStat(VT_FORWARD_PERFORMANCE_LOG_PATH)
+  const raw = readJsonFile(VT_FORWARD_PERFORMANCE_PATH)
+  const observations = Array.isArray(raw?.observations) ? raw.observations : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_FORWARD_PERFORMANCE_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'forward_performance_observe_only',
+    sourceQueueGeneratedAt:
+      typeof raw?.source_queue_generated_at === 'string'
+        ? raw.source_queue_generated_at
+        : null,
+    activeCount:
+      typeof raw?.active_count === 'number' ? raw.active_count : observations.length,
+    observedCount:
+      typeof raw?.observed_count === 'number'
+        ? raw.observed_count
+        : observations.length,
+    observations,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      executionEnabled: safety.execution_enabled === true,
+      demoTradingEnabled: safety.demo_trading_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      registryMutated: safety.registry_mutated === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
 export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
@@ -912,6 +964,8 @@ export const Route = createFileRoute('/api/vt-capital')({
             strategyTestLog: VT_STRATEGY_TEST_LOG_PATH,
             forwardTestQueue: VT_FORWARD_TEST_QUEUE_PATH,
             forwardTestQueueLog: VT_FORWARD_TEST_QUEUE_LOG_PATH,
+            forwardPerformance: VT_FORWARD_PERFORMANCE_PATH,
+            forwardPerformanceLog: VT_FORWARD_PERFORMANCE_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -933,6 +987,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           strategyRegistry: readStrategyRegistry(),
           backtestResults: readBacktestResults(),
           forwardTestQueue: readForwardTestQueue(),
+          forwardPerformance: readForwardPerformance(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,

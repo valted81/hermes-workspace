@@ -354,6 +354,51 @@ const payload = {
       brokerCallsAllowed: false,
     },
   },
+  forwardPerformance: {
+    fileExists: true,
+    updatedAt: Date.UTC(2026, 4, 8, 10, 25, 0),
+    logExists: true,
+    logUpdatedAt: Date.UTC(2026, 4, 8, 10, 25, 0),
+    logEventCount: 1,
+    generatedAt: '2026-05-08T10:25:00+00:00',
+    mode: 'forward_performance_observe_only',
+    sourceQueueGeneratedAt: '2026-05-08T10:15:00+00:00',
+    activeCount: 1,
+    observedCount: 1,
+    observations: [
+      {
+        candidate_key: 'intraday-breakout-fast:SOL:35m:breakout:fe0b6add4327',
+        strategy_id: 'intraday-breakout-fast',
+        strategy_name: 'Fast Breakout',
+        symbol: 'SOL',
+        timeframe: '35m',
+        logic: 'custom_signals',
+        params: { lookback: 10, hold: 4 },
+        status: 'observed',
+        interface: 'generate_signals',
+        source: 'sandbox_strategy_module',
+        score_pct: 0.1174,
+        sample: 14,
+        win_rate_pct: 57.14,
+        max_drawdown_pct: 2.4491,
+        equity_last: 1.016084,
+        candles: 108,
+        observe_only: true,
+        execution_enabled: false,
+        paper_promoted: false,
+        broker_calls_allowed: false,
+      },
+    ],
+    safety: {
+      observeOnly: true,
+      executionEnabled: false,
+      demoTradingEnabled: false,
+      liveTradingEnabled: false,
+      registryMutated: false,
+      paperPromoted: false,
+      brokerCallsAllowed: false,
+    },
+  },
   backtestData: {
     source: 'CoinGecko free',
     fetcher: 'vt_capital.fetch_candles',
@@ -667,6 +712,12 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('queued_forward_observe')
     expect(container.textContent).toContain('concilium_watch_risk_gate_passed')
     expect(container.textContent).toContain('paper_promoted=false')
+    expect(container.textContent).toContain('Forward Performance')
+    expect(container.textContent).toContain('1 osservati')
+    expect(container.textContent).toContain('Perf filepresente')
+    expect(container.textContent).toContain('score forward: +0.12%')
+    expect(container.textContent).toContain('win-rate: +57.14%')
+    expect(container.textContent).toContain('broker off')
     await clickButtonContaining(container, 'Portafoglio')
     expect(container.textContent).toContain('Portafoglio attivo')
     expect(container.textContent).toContain('PnL non realizzato')
