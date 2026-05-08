@@ -53,6 +53,14 @@ const VT_FORWARD_PERFORMANCE_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/strategies/forward-performance.jsonl',
 )
+const VT_MANUAL_REVIEW_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/manual-paper-review.json',
+)
+const VT_MANUAL_REVIEW_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/manual-paper-review.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -853,7 +861,9 @@ export function readForwardPerformance(): JsonRecord {
         ? raw.source_queue_generated_at
         : null,
     activeCount:
-      typeof raw?.active_count === 'number' ? raw.active_count : observations.length,
+      typeof raw?.active_count === 'number'
+        ? raw.active_count
+        : observations.length,
     observedCount:
       typeof raw?.observed_count === 'number'
         ? raw.observed_count
@@ -862,6 +872,59 @@ export function readForwardPerformance(): JsonRecord {
     forwardHistory,
     safety: {
       observeOnly: safety.observe_only !== false,
+      executionEnabled: safety.execution_enabled === true,
+      demoTradingEnabled: safety.demo_trading_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      registryMutated: safety.registry_mutated === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
+export function readManualPaperReview(): JsonRecord {
+  const stat = safeStat(VT_MANUAL_REVIEW_PATH)
+  const logStat = safeStat(VT_MANUAL_REVIEW_LOG_PATH)
+  const raw = readJsonFile(VT_MANUAL_REVIEW_PATH)
+  const packets = Array.isArray(raw?.packets) ? raw.packets : []
+  const eligible = Array.isArray(raw?.eligible) ? raw.eligible : []
+  const waiting = Array.isArray(raw?.waiting) ? raw.waiting : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_MANUAL_REVIEW_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'manual_paper_review_packet_observe_only',
+    sourceForwardGeneratedAt:
+      typeof raw?.source_forward_generated_at === 'string'
+        ? raw.source_forward_generated_at
+        : null,
+    packetCount:
+      typeof raw?.packet_count === 'number' ? raw.packet_count : packets.length,
+    eligibleCount:
+      typeof raw?.eligible_count === 'number'
+        ? raw.eligible_count
+        : eligible.length,
+    waitingCount:
+      typeof raw?.waiting_count === 'number'
+        ? raw.waiting_count
+        : waiting.length,
+    packets,
+    eligible,
+    waiting,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      manualReviewRequired: safety.manual_review_required !== false,
       executionEnabled: safety.execution_enabled === true,
       demoTradingEnabled: safety.demo_trading_enabled === true,
       liveTradingEnabled: safety.live_trading_enabled === true,
@@ -979,6 +1042,8 @@ export const Route = createFileRoute('/api/vt-capital')({
             forwardTestQueueLog: VT_FORWARD_TEST_QUEUE_LOG_PATH,
             forwardPerformance: VT_FORWARD_PERFORMANCE_PATH,
             forwardPerformanceLog: VT_FORWARD_PERFORMANCE_LOG_PATH,
+            manualPaperReview: VT_MANUAL_REVIEW_PATH,
+            manualPaperReviewLog: VT_MANUAL_REVIEW_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -1001,6 +1066,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           backtestResults: readBacktestResults(),
           forwardTestQueue: readForwardTestQueue(),
           forwardPerformance: readForwardPerformance(),
+          manualPaperReview: readManualPaperReview(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,

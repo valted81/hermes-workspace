@@ -4,6 +4,7 @@ import {
   readBacktestResults,
   readForwardPerformance,
   readForwardTestQueue,
+  readManualPaperReview,
   resolveGuardianOrderEvents,
   summarizeBacktestData,
   summarizeCouncilHistory,
@@ -190,6 +191,35 @@ describe('VT Capital backtest data API summary', () => {
         execution_enabled: false,
         broker_calls_allowed: false,
       },
+    })
+  })
+
+  it('reads manual paper review packets without promoting strategies', () => {
+    const summary = readManualPaperReview()
+
+    expect(summary).toMatchObject({
+      fileExists: true,
+      mode: 'manual_paper_review_packet_observe_only',
+      packetCount: 1,
+      eligibleCount: 0,
+      waitingCount: 1,
+      safety: {
+        observeOnly: true,
+        manualReviewRequired: true,
+        executionEnabled: false,
+        demoTradingEnabled: false,
+        liveTradingEnabled: false,
+        registryMutated: false,
+        paperPromoted: false,
+        brokerCallsAllowed: false,
+      },
+    })
+    expect(summary.packets[0]).toMatchObject({
+      strategy_id: 'intraday-breakout-fast',
+      symbol: 'SOL',
+      timeframe: '35m',
+      status: 'WAITING_MORE_FORWARD_EVIDENCE',
+      proposed_manual_action: 'keep_forward_observe',
     })
   })
 

@@ -236,6 +236,33 @@ type ForwardPerformancePayload = {
   }
 }
 
+type ManualPaperReviewPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists: boolean
+  logUpdatedAt: number | null
+  logEventCount: number
+  generatedAt: string | null
+  mode: string
+  sourceForwardGeneratedAt: string | null
+  packetCount: number
+  eligibleCount: number
+  waitingCount: number
+  packets: Array<Record<string, unknown>>
+  eligible: Array<Record<string, unknown>>
+  waiting: Array<Record<string, unknown>>
+  safety: {
+    observeOnly: boolean
+    manualReviewRequired: boolean
+    executionEnabled: boolean
+    demoTradingEnabled: boolean
+    liveTradingEnabled: boolean
+    registryMutated: boolean
+    paperPromoted: boolean
+    brokerCallsAllowed: boolean
+  }
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -292,6 +319,7 @@ type VtPayload = {
   backtestResults?: BacktestResultPayload
   forwardTestQueue?: ForwardTestQueuePayload
   forwardPerformance?: ForwardPerformancePayload
+  manualPaperReview?: ManualPaperReviewPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -2484,9 +2512,12 @@ export function VtCapitalScreen() {
               <div className="mt-4 rounded-xl border p-3 text-sm text-muted">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="font-semibold text-ink">Forward Performance</div>
+                    <div className="font-semibold text-ink">
+                      Forward Performance
+                    </div>
                     <div className="text-xs">
-                      Replay observe-only sui candidati in queue: misura cosa avrebbe fatto, senza ordini.
+                      Replay observe-only sui candidati in queue: misura cosa
+                      avrebbe fatto, senza ordini.
                     </div>
                   </div>
                   <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
@@ -2496,7 +2527,9 @@ export function VtCapitalScreen() {
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <Metric
                     label="Perf file"
-                    value={data.forwardPerformance?.fileExists ? 'presente' : 'manca'}
+                    value={
+                      data.forwardPerformance?.fileExists ? 'presente' : 'manca'
+                    }
                     tone={data.forwardPerformance?.fileExists ? 'good' : 'warn'}
                   />
                   <Metric
@@ -2519,61 +2552,215 @@ export function VtCapitalScreen() {
                 </div>
                 <div className="mt-3 rounded-lg border p-3 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-semibold text-ink">Storico forward + gate manuale</div>
+                    <div className="font-semibold text-ink">
+                      Storico forward + gate manuale
+                    </div>
                     <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
-                      {Number(data.forwardPerformance?.forwardHistory?.eligible_count ?? 0)} eligible
+                      {Number(
+                        data.forwardPerformance?.forwardHistory
+                          ?.eligible_count ?? 0,
+                      )}{' '}
+                      eligible
                     </span>
                   </div>
                   <div className="mt-2 grid gap-1 sm:grid-cols-3">
                     <span>
-                      candidati: {String(data.forwardPerformance?.forwardHistory?.candidate_count ?? 0)}
+                      candidati:{' '}
+                      {String(
+                        data.forwardPerformance?.forwardHistory
+                          ?.candidate_count ?? 0,
+                      )}
                     </span>
                     <span>
                       min obs:{' '}
-                      {String(data.forwardPerformance?.forwardHistory?.thresholds?.min_observations ?? 3)}
+                      {String(
+                        data.forwardPerformance?.forwardHistory?.thresholds
+                          ?.min_observations ?? 3,
+                      )}
                     </span>
                     <span>
                       max DD:{' '}
-                      {formatPct(Number(data.forwardPerformance?.forwardHistory?.thresholds?.max_drawdown_pct ?? 10))}
+                      {formatPct(
+                        Number(
+                          data.forwardPerformance?.forwardHistory?.thresholds
+                            ?.max_drawdown_pct ?? 10,
+                        ),
+                      )}
                     </span>
                   </div>
                   <div className="mt-2 space-y-1">
-                    {(data.forwardPerformance?.forwardHistory?.candidates ?? []).length ? (
-                      (data.forwardPerformance?.forwardHistory?.candidates ?? []).slice(0, 4).map((candidate, index) => {
-                        const manualGate = asRecord(candidate.manual_gate)
-                        const avgScore = Number(candidate.average_score_pct)
-                        const worstDrawdown = Number(candidate.worst_drawdown_pct)
-                        return (
-                          <div
-                            key={`${String(candidate.candidate_key ?? 'forward-history')}-${index}`}
-                            className="rounded-md border px-2 py-1"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="font-semibold text-ink">
-                                {String(candidate.strategy_name ?? candidate.strategy_id ?? 'strategia')} ·{' '}
-                                {String(candidate.symbol ?? 'asset')} {String(candidate.timeframe ?? 'tf')}
-                              </span>
-                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase">
-                                {String(candidate.recommendation ?? 'KEEP_FORWARD_OBSERVE')}
-                              </span>
+                    {(data.forwardPerformance?.forwardHistory?.candidates ?? [])
+                      .length ? (
+                      (
+                        data.forwardPerformance?.forwardHistory?.candidates ??
+                        []
+                      )
+                        .slice(0, 4)
+                        .map((candidate, index) => {
+                          const manualGate = asRecord(candidate.manual_gate)
+                          const avgScore = Number(candidate.average_score_pct)
+                          const worstDrawdown = Number(
+                            candidate.worst_drawdown_pct,
+                          )
+                          return (
+                            <div
+                              key={`${String(candidate.candidate_key ?? 'forward-history')}-${index}`}
+                              className="rounded-md border px-2 py-1"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-semibold text-ink">
+                                  {String(
+                                    candidate.strategy_name ??
+                                      candidate.strategy_id ??
+                                      'strategia',
+                                  )}{' '}
+                                  · {String(candidate.symbol ?? 'asset')}{' '}
+                                  {String(candidate.timeframe ?? 'tf')}
+                                </span>
+                                <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase">
+                                  {String(
+                                    candidate.recommendation ??
+                                      'KEEP_FORWARD_OBSERVE',
+                                  )}
+                                </span>
+                              </div>
+                              <div className="mt-1 grid gap-1 text-[11px] sm:grid-cols-3">
+                                <span>
+                                  obs:{' '}
+                                  {String(candidate.observation_count ?? 0)}
+                                </span>
+                                <span>
+                                  sample: {String(candidate.total_sample ?? 0)}
+                                </span>
+                                <span>
+                                  avg score:{' '}
+                                  {Number.isFinite(avgScore)
+                                    ? formatPct(avgScore)
+                                    : '—'}
+                                </span>
+                                <span>
+                                  worst DD:{' '}
+                                  {Number.isFinite(worstDrawdown)
+                                    ? formatPct(worstDrawdown)
+                                    : '—'}
+                                </span>
+                                <span>
+                                  gate: {String(manualGate?.status ?? '—')}
+                                </span>
+                                <span>paper: false · manual review</span>
+                              </div>
+                              <div className="mt-1 text-[11px] text-muted">
+                                reason: {String(manualGate?.reason_code ?? '—')}{' '}
+                                · broker off · execution=false
+                              </div>
                             </div>
-                            <div className="mt-1 grid gap-1 text-[11px] sm:grid-cols-3">
-                              <span>obs: {String(candidate.observation_count ?? 0)}</span>
-                              <span>sample: {String(candidate.total_sample ?? 0)}</span>
-                              <span>avg score: {Number.isFinite(avgScore) ? formatPct(avgScore) : '—'}</span>
-                              <span>worst DD: {Number.isFinite(worstDrawdown) ? formatPct(worstDrawdown) : '—'}</span>
-                              <span>gate: {String(manualGate?.status ?? '—')}</span>
-                              <span>paper: false · manual review</span>
-                            </div>
-                            <div className="mt-1 text-[11px] text-muted">
-                              reason: {String(manualGate?.reason_code ?? '—')} · broker off · execution=false
-                            </div>
-                          </div>
-                        )
-                      })
+                          )
+                        })
                     ) : (
                       <div className="text-[11px] text-muted">
-                        Nessuno storico forward sufficiente. Il gate richiede più osservazioni prima di qualsiasi review manuale.
+                        Nessuno storico forward sufficiente. Il gate richiede
+                        più osservazioni prima di qualsiasi review manuale.
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-ink">
+                      Manual Review Packets
+                    </div>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                      {Number(data.manualPaperReview?.eligibleCount ?? 0)}{' '}
+                      pronti
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                    <span>
+                      packet: {String(data.manualPaperReview?.packetCount ?? 0)}
+                    </span>
+                    <span>
+                      waiting:{' '}
+                      {String(data.manualPaperReview?.waitingCount ?? 0)}
+                    </span>
+                    <span>
+                      safety:{' '}
+                      {data.manualPaperReview?.safety?.brokerCallsAllowed
+                        ? 'broker on'
+                        : 'broker off'}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {(data.manualPaperReview?.packets ?? []).length ? (
+                      (data.manualPaperReview?.packets ?? [])
+                        .slice(0, 4)
+                        .map((packet, index) => {
+                          const evidence = asRecord(packet.evidence)
+                          const avgScore = Number(evidence?.average_score_pct)
+                          const worstDrawdown = Number(
+                            evidence?.worst_drawdown_pct,
+                          )
+                          return (
+                            <div
+                              key={`${String(packet.packet_id ?? 'manual-review')}-${index}`}
+                              className="rounded-md border px-2 py-1"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-semibold text-ink">
+                                  {String(
+                                    packet.strategy_name ??
+                                      packet.strategy_id ??
+                                      'strategia',
+                                  )}{' '}
+                                  · {String(packet.symbol ?? 'asset')}{' '}
+                                  {String(packet.timeframe ?? 'tf')}
+                                </span>
+                                <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase">
+                                  {String(
+                                    packet.status ??
+                                      'WAITING_MORE_FORWARD_EVIDENCE',
+                                  )}
+                                </span>
+                              </div>
+                              <div className="mt-1 grid gap-1 text-[11px] sm:grid-cols-3">
+                                <span>
+                                  azione:{' '}
+                                  {String(
+                                    packet.proposed_manual_action ??
+                                      'keep_forward_observe',
+                                  )}
+                                </span>
+                                <span>
+                                  obs:{' '}
+                                  {String(evidence?.observation_count ?? 0)}
+                                </span>
+                                <span>
+                                  sample: {String(evidence?.total_sample ?? 0)}
+                                </span>
+                                <span>
+                                  avg:{' '}
+                                  {Number.isFinite(avgScore)
+                                    ? formatPct(avgScore)
+                                    : '—'}
+                                </span>
+                                <span>
+                                  dd:{' '}
+                                  {Number.isFinite(worstDrawdown)
+                                    ? formatPct(worstDrawdown)
+                                    : '—'}
+                                </span>
+                                <span>paper_promoted=false</span>
+                              </div>
+                              <div className="mt-1 text-[11px] text-muted">
+                                reason: {String(packet.reason_code ?? '—')} ·
+                                review manuale Valerio · execution=false
+                              </div>
+                            </div>
+                          )
+                        })
+                    ) : (
+                      <div className="text-[11px] text-muted">
+                        Nessun packet manuale: serve prima storico forward dal
+                        gate.
                       </div>
                     )}
                   </div>
@@ -2596,7 +2783,11 @@ export function VtCapitalScreen() {
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="font-semibold text-ink">
-                                {String(observation.strategy_name ?? observation.strategy_id ?? 'strategia')}{' '}
+                                {String(
+                                  observation.strategy_name ??
+                                    observation.strategy_id ??
+                                    'strategia',
+                                )}{' '}
                                 · {String(observation.symbol ?? 'asset')}{' '}
                                 {String(observation.timeframe ?? 'tf')}
                               </div>
@@ -2605,16 +2796,40 @@ export function VtCapitalScreen() {
                               </span>
                             </div>
                             <div className="mt-2 grid gap-1 text-xs sm:grid-cols-3">
-                              <span>score forward: {Number.isFinite(score) ? formatPct(score) : '—'}</span>
-                              <span>trade/sample: {String(observation.sample ?? '—')}</span>
-                              <span>win-rate: {formatPct(Number(observation.win_rate_pct))}</span>
-                              <span>drawdown: {Number.isFinite(drawdown) ? formatPct(drawdown) : '—'}</span>
-                              <span>equity: {Number.isFinite(equityLast) ? equityLast.toFixed(4) : '—'}</span>
-                              <span>candele: {String(observation.candles ?? '—')}</span>
+                              <span>
+                                score forward:{' '}
+                                {Number.isFinite(score)
+                                  ? formatPct(score)
+                                  : '—'}
+                              </span>
+                              <span>
+                                trade/sample:{' '}
+                                {String(observation.sample ?? '—')}
+                              </span>
+                              <span>
+                                win-rate:{' '}
+                                {formatPct(Number(observation.win_rate_pct))}
+                              </span>
+                              <span>
+                                drawdown:{' '}
+                                {Number.isFinite(drawdown)
+                                  ? formatPct(drawdown)
+                                  : '—'}
+                              </span>
+                              <span>
+                                equity:{' '}
+                                {Number.isFinite(equityLast)
+                                  ? equityLast.toFixed(4)
+                                  : '—'}
+                              </span>
+                              <span>
+                                candele: {String(observation.candles ?? '—')}
+                              </span>
                             </div>
                             <div className="mt-2 text-[11px] text-muted">
-                              interface: {String(observation.interface ?? '—')} · source:{' '}
-                              {String(observation.source ?? '—')} · broker off · paper_promoted=false
+                              interface: {String(observation.interface ?? '—')}{' '}
+                              · source: {String(observation.source ?? '—')} ·
+                              broker off · paper_promoted=false
                             </div>
                           </div>
                         )
@@ -2622,7 +2837,8 @@ export function VtCapitalScreen() {
                     )
                   ) : (
                     <div className="rounded-lg border p-3 text-xs">
-                      Nessuna performance forward osservata. Serve queue attiva + cron performance.
+                      Nessuna performance forward osservata. Serve queue attiva
+                      + cron performance.
                     </div>
                   )}
                 </div>

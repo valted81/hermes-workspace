@@ -757,7 +757,9 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('0 eligible')
     expect(container.textContent).toContain('KEEP_FORWARD_OBSERVE')
     expect(container.textContent).toContain('waiting_more_evidence')
-    expect(container.textContent).toContain('forward_observations_below_minimum')
+    expect(container.textContent).toContain(
+      'forward_observations_below_minimum',
+    )
     expect(container.textContent).toContain('score forward: +0.12%')
     expect(container.textContent).toContain('win-rate: +57.14%')
     expect(container.textContent).toContain('broker off')
