@@ -169,6 +169,14 @@ type BacktestResultPayload = {
   results: Array<Record<string, unknown>>
 }
 
+type StrategyTestLogPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  eventCount: number
+  byStrategy: Record<string, number>
+  recent: Array<Record<string, unknown>>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -223,6 +231,7 @@ type VtPayload = {
   autoresearch?: AutoResearchPayload
   strategyRegistry?: StrategyRegistryPayload
   backtestResults?: BacktestResultPayload
+  strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
   portfolio?: PortfolioSnapshot
@@ -234,6 +243,7 @@ type VtTab =
   | 'mappa'
   | 'trading'
   | 'strategie'
+  | 'log-strategie'
   | 'portafoglio'
   | 'concilium'
   | 'investimenti'
@@ -455,6 +465,13 @@ const VT_TABS: Array<{
     icon: '🧪',
     short: 'Lab',
     description: 'Crea, testa, abilita.',
+  },
+  {
+    id: 'log-strategie',
+    label: 'Log test',
+    icon: '📜',
+    short: 'Test',
+    description: 'Strategie e prove.',
   },
   {
     id: 'portafoglio',
@@ -2241,6 +2258,122 @@ export function VtCapitalScreen() {
                 </div>
               </Card>
             </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'log-strategie' ? (
+          <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
+            <Card title="Log strategie" accent="var(--theme-accent)">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Metric
+                  label="File log"
+                  value={
+                    data.strategyTestLogs?.fileExists ? 'presente' : 'manca'
+                  }
+                  tone={data.strategyTestLogs?.fileExists ? 'good' : 'warn'}
+                />
+                <Metric
+                  label="Test salvati"
+                  value={data.strategyTestLogs?.eventCount ?? 0}
+                />
+                <Metric
+                  label="Ultimo log"
+                  value={
+                    data.strategyTestLogs?.updatedAt
+                      ? formatTime(data.strategyTestLogs.updatedAt)
+                      : '—'
+                  }
+                />
+              </div>
+              <div className="mt-4 grid gap-2 text-sm text-muted">
+                {strategies.map((strategy) => (
+                  <div
+                    key={strategy.id}
+                    className="rounded-lg border p-3"
+                    style={{
+                      background: 'var(--theme-card2)',
+                      borderColor: 'var(--theme-border)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold text-ink">
+                        {strategy.icon} {strategy.name}
+                      </div>
+                      <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                        {data.strategyTestLogs?.byStrategy[strategy.id] ?? 0}{' '}
+                        test
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs">
+                      {strategy.id} · {strategy.timeframes} ·{' '}
+                      {strategy.dataSource ?? strategy.dataNeed}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card title="Tutti i test" accent="var(--theme-success)">
+              <div className="space-y-2 text-sm text-muted">
+                {(data.strategyTestLogs?.recent ?? []).length ? (
+                  (data.strategyTestLogs?.recent ?? []).map((log, index) => {
+                    const score = Number(log.score_pct)
+                    const scoreLabel = Number.isFinite(score)
+                      ? formatPct(score)
+                      : '—'
+                    return (
+                      <div
+                        key={`${String(log.generated_at ?? 'run')}-${String(log.strategy_id ?? 'strategy')}-${index}`}
+                        className="rounded-lg border p-3"
+                        style={{
+                          background: 'var(--theme-card2)',
+                          borderColor: 'var(--theme-border)',
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold text-ink">
+                            {String(log.strategy_id ?? 'strategia')} ·{' '}
+                            {String(log.symbol ?? 'asset')}{' '}
+                            {String(log.timeframe ?? 'tf')}
+                          </div>
+                          <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                            {String(log.decision ?? '—')}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
+                          <span>logic: {String(log.best_logic ?? '—')}</span>
+                          <span>score: {scoreLabel}</span>
+                          <span>sample: {String(log.sample ?? '—')}</span>
+                          <span>
+                            varianti: {String(log.variants_tested ?? '—')}
+                          </span>
+                          <span>candele: {String(log.candles ?? '—')}</span>
+                          <span>
+                            walk-forward:{' '}
+                            {String(
+                              (
+                                log.walk_forward as
+                                  | Record<string, unknown>
+                                  | undefined
+                              )?.status ?? '—',
+                            )}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-[11px] text-muted">
+                          {formatIsoTime(String(log.generated_at ?? ''))} ·
+                          params: {compactJson(log.best_params ?? {})}
+                        </div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-lg border p-3 text-xs">
+                    Nessun log ancora. Il prossimo run AutoResearch scriverà una
+                    riga per ogni strategia/asset/timeframe testato.
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         ) : null}
 

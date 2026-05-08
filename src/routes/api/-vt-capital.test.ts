@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPortfolioSnapshot,
+  readBacktestResults,
   resolveGuardianOrderEvents,
+  summarizeBacktestData,
   summarizeCouncilHistory,
   summarizeShadowAudit,
+  summarizeStrategyTestLogs,
 } from './vt-capital'
 
 describe('VT Capital guardian API event summary', () => {
@@ -93,6 +96,68 @@ describe('VT Capital shadow audit API summary', () => {
       executionEnabled: false,
       brokerSupplied: false,
     })
+  })
+})
+
+describe('VT Capital backtest data API summary', () => {
+  it('reports Bybit/CCXT multi-timeframe data source for Strategy Factory', () => {
+    const summary = summarizeBacktestData()
+
+    expect(summary).toMatchObject({
+      source: 'Bybit/CCXT OHLCV',
+      fetcher: 'vt_capital.fetch_candles --config config/backtest-data.yaml',
+      configPath: 'config/backtest-data.yaml',
+      outputDir: 'data/desks/desk-a-swing',
+      symbols: ['BTC', 'ETH', 'SOL'],
+      timeframes: ['5m', '15m', '1h', '4h', '1d', '1w', '1M'],
+      nextSource: 'Strategy-specific loaders + walk-forward cache',
+    })
+    expect(summary.limitation).toContain('35m')
+  })
+
+  it('reads the AutoResearch walk-forward results file used by the current lab', () => {
+    const summary = readBacktestResults()
+
+    expect(summary).toMatchObject({
+      fileExists: true,
+      mode: 'offline_walk_forward_backtest_only',
+      executionEnabled: false,
+    })
+    expect(summary.results).toHaveLength(3)
+  })
+
+  it('summarizes append-only strategy test logs for the cockpit log tab', () => {
+    const summary = summarizeStrategyTestLogs(
+      [
+        {
+          strategy_id: 'intraday-breakout-fast',
+          symbol: 'SOL',
+          timeframe: '35m',
+          decision: 'WATCH',
+          best_logic: 'breakout',
+        },
+        {
+          strategy_id: 'dca-core-crypto',
+          symbol: 'BTC',
+          timeframe: '1w',
+          decision: 'WATCH',
+          best_logic: 'smart_dca',
+        },
+      ],
+      12,
+      12345,
+    )
+
+    expect(summary).toMatchObject({
+      fileExists: true,
+      updatedAt: 12345,
+      eventCount: 12,
+      byStrategy: {
+        'intraday-breakout-fast': 1,
+        'dca-core-crypto': 1,
+      },
+    })
+    expect(summary.recent).toHaveLength(2)
   })
 })
 

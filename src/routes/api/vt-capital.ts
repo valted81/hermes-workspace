@@ -31,7 +31,11 @@ const VT_STRATEGY_REGISTRY_PATH = path.join(
 )
 const VT_BACKTEST_RESULTS_PATH = path.join(
   VT_REPO_DIR,
-  'data/strategies/backtest-results.json',
+  'data/strategies/autoresearch-backtest-results.json',
+)
+const VT_STRATEGY_TEST_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/strategy-test-log.jsonl',
 )
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
@@ -698,7 +702,7 @@ function readStrategyRegistry(): JsonRecord {
   }
 }
 
-function readBacktestResults(): JsonRecord {
+export function readBacktestResults(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_RESULTS_PATH)
   const raw = readJsonFile(VT_BACKTEST_RESULTS_PATH)
   return {
@@ -713,7 +717,26 @@ function readBacktestResults(): JsonRecord {
   }
 }
 
-function summarizeBacktestData(): JsonRecord {
+export function summarizeStrategyTestLogs(
+  records: Array<JsonRecord>,
+  eventCount: number,
+  updatedAt: number | null,
+): JsonRecord {
+  const byStrategy: Record<string, number> = {}
+  for (const record of records) {
+    const strategyId = String(record.strategy_id ?? 'unknown')
+    byStrategy[strategyId] = (byStrategy[strategyId] ?? 0) + 1
+  }
+  return {
+    fileExists: eventCount > 0,
+    updatedAt,
+    eventCount,
+    byStrategy,
+    recent: records.slice(-60).reverse(),
+  }
+}
+
+export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
     ? fs
@@ -722,18 +745,18 @@ function summarizeBacktestData(): JsonRecord {
         .sort()
     : []
   return {
-    source: 'CoinGecko free',
-    fetcher: 'vt_capital.fetch_candles',
-    configPath: 'config/firm.yaml',
+    source: 'Bybit/CCXT OHLCV',
+    fetcher: 'vt_capital.fetch_candles --config config/backtest-data.yaml',
+    configPath: 'config/backtest-data.yaml',
     outputDir: 'data/desks/desk-a-swing',
     fileExists: Boolean(stat),
     fileCount: files.length,
     files: files.slice(0, 12),
     symbols: ['BTC', 'ETH', 'SOL'],
-    timeframes: ['1h', '4h'],
+    timeframes: ['5m', '15m', '1h', '4h', '1d', '1w', '1M'],
     limitation:
-      'CoinGecko OHLC free non include volume; per backtest seri serve Bybit/CCXT OHLCV.',
-    nextSource: 'Bybit/CCXT OHLCV',
+      'Dati pubblici Bybit via CCXT, observe-only. 35m viene ricampionato da 5m; servono ancora walk-forward, split out-of-sample e logica strategia dedicata.',
+    nextSource: 'Strategy-specific loaders + walk-forward cache',
   }
 }
 
@@ -779,8 +802,16 @@ export const Route = createFileRoute('/api/vt-capital')({
         const proposedRecords = readLastLines(VT_ORDER_PROPOSED_PATH, 10)
         const executedRecords = readLastLines(VT_ORDER_EXECUTED_PATH, 10)
         const shadowRecords = readLastLines(VT_SHADOW_AUDIT_PATH, 10)
+        const strategyTestLogRecords = readLastLines(
+          VT_STRATEGY_TEST_LOG_PATH,
+          80,
+        )
         const shadowStat = safeStat(VT_SHADOW_AUDIT_PATH)
+        const strategyTestLogStat = safeStat(VT_STRATEGY_TEST_LOG_PATH)
         const shadowEventCount = countJsonlRecords(VT_SHADOW_AUDIT_PATH)
+        const strategyTestLogCount = countJsonlRecords(
+          VT_STRATEGY_TEST_LOG_PATH,
+        )
         const biasStat = safeStat(HOURLY_BIAS_PATH)
         const precheckStat = safeStat(PRECHECK_PATH)
         const { lastRiskCheck, lastOrderProposed, lastOrderExecuted } =
@@ -807,6 +838,7 @@ export const Route = createFileRoute('/api/vt-capital')({
             backtestData: VT_BACKTEST_DATA_DIR,
             strategyRegistry: VT_STRATEGY_REGISTRY_PATH,
             backtestResults: VT_BACKTEST_RESULTS_PATH,
+            strategyTestLog: VT_STRATEGY_TEST_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -827,6 +859,11 @@ export const Route = createFileRoute('/api/vt-capital')({
           autoresearch: readAutoresearchConfig(),
           strategyRegistry: readStrategyRegistry(),
           backtestResults: readBacktestResults(),
+          strategyTestLogs: summarizeStrategyTestLogs(
+            strategyTestLogRecords,
+            strategyTestLogCount,
+            strategyTestLogStat?.mtimeMs ?? null,
+          ),
           backtestData: summarizeBacktestData(),
           shadow: summarizeShadowAudit(
             shadowRecords,

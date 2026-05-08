@@ -223,6 +223,48 @@ const payload = {
       },
     ],
   },
+  strategyTestLogs: {
+    fileExists: true,
+    updatedAt: Date.UTC(2026, 4, 8, 9, 45, 0),
+    eventCount: 27,
+    byStrategy: {
+      'intraday-breakout-fast': 9,
+      'mean-reversion-rsi': 9,
+      'dca-core-crypto': 9,
+    },
+    recent: [
+      {
+        generated_at: '2026-05-08T09:45:00+00:00',
+        strategy_id: 'intraday-breakout-fast',
+        strategy_name: 'Fast Breakout',
+        decision: 'WATCH',
+        symbol: 'SOL',
+        timeframe: '35m',
+        candles: 120,
+        variants_tested: 9,
+        best_logic: 'breakout',
+        best_params: { lookback: 10, hold: 4 },
+        score_pct: 0.1174,
+        sample: 21,
+        walk_forward: { status: 'pass' },
+      },
+      {
+        generated_at: '2026-05-08T09:45:00+00:00',
+        strategy_id: 'dca-core-crypto',
+        strategy_name: 'DCA Core',
+        decision: 'WATCH',
+        symbol: 'BTC',
+        timeframe: '1w',
+        candles: 180,
+        variants_tested: 10,
+        best_logic: 'smart_dca',
+        best_params: { ma_window: 50, boost_under_ma: 2 },
+        score_pct: 109.7997,
+        sample: 180,
+        walk_forward: { status: 'pass' },
+      },
+    ],
+  },
   backtestData: {
     source: 'CoinGecko free',
     fetcher: 'vt_capital.fetch_candles',
@@ -514,6 +556,14 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('CoinGecko free')
     expect(container.textContent).toContain('Bybit/CCXT OHLCV')
     expect(container.textContent).toContain('non abilitano live trading')
+    await clickButtonContaining(container, 'Log test')
+    expect(container.textContent).toContain('Log strategie')
+    expect(container.textContent).toContain('Tutti i test')
+    expect(container.textContent).toContain('Test salvati27')
+    expect(container.textContent).toContain('intraday-breakout-fast')
+    expect(container.textContent).toContain('SOL 35m')
+    expect(container.textContent).toContain('logic: breakout')
+    expect(container.textContent).toContain('walk-forward: pass')
     await clickButtonContaining(container, 'Portafoglio')
     expect(container.textContent).toContain('Portafoglio attivo')
     expect(container.textContent).toContain('PnL non realizzato')
@@ -553,10 +603,11 @@ describe('VtCapitalScreen', () => {
     const nav = container.querySelector('[aria-label="Sezioni VT Capital"]')
     expect(nav).not.toBeNull()
     expect(nav?.className).toContain('grid')
-    expect(nav?.querySelectorAll('[data-vt-tab-card="true"]').length).toBe(8)
+    expect(nav?.querySelectorAll('[data-vt-tab-card="true"]').length).toBe(9)
     expect(nav?.textContent).toContain('🗺️Mappa')
     expect(nav?.textContent).toContain('📈Trading')
     expect(nav?.textContent).toContain('🧪Strategie')
+    expect(nav?.textContent).toContain('📜Log test')
     expect(nav?.textContent).toContain('💼Portafoglio')
     expect(nav?.textContent).toContain('🧠Concilium')
     expect(nav?.textContent).toContain('🏦Investimenti')
@@ -565,6 +616,7 @@ describe('VtCapitalScreen', () => {
     expect(nav?.textContent).toContain('Schema')
     expect(nav?.textContent).toContain('Ordini')
     expect(nav?.textContent).toContain('Lab')
+    expect(nav?.textContent).toContain('Test')
     expect(nav?.textContent).toContain('PNL')
     expect(nav?.textContent).toContain('Agenti')
     expect(nav?.textContent).not.toContain(
