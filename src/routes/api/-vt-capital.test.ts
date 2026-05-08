@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPortfolioSnapshot,
   readBacktestResults,
+  readForwardTestQueue,
   resolveGuardianOrderEvents,
   summarizeBacktestData,
   summarizeCouncilHistory,
@@ -124,6 +125,34 @@ describe('VT Capital backtest data API summary', () => {
       executionEnabled: false,
     })
     expect(summary.results).toHaveLength(3)
+  })
+
+  it('reads the forward observe queue without enabling execution', () => {
+    const summary = readForwardTestQueue()
+
+    expect(summary).toMatchObject({
+      fileExists: true,
+      mode: 'forward_observe_queue_only',
+      activeCount: 1,
+      safety: {
+        observeOnly: true,
+        executionEnabled: false,
+        demoTradingEnabled: false,
+        liveTradingEnabled: false,
+        registryMutated: false,
+        paperPromoted: false,
+        brokerCallsAllowed: false,
+      },
+    })
+    expect(summary.active[0]).toMatchObject({
+      strategy_id: 'intraday-breakout-fast',
+      symbol: 'SOL',
+      timeframe: '35m',
+      status: 'queued_forward_observe',
+      observe_only: true,
+      execution_enabled: false,
+      paper_promoted: false,
+    })
   })
 
   it('summarizes append-only strategy test logs for the cockpit log tab', () => {

@@ -309,6 +309,51 @@ const payload = {
       },
     ],
   },
+  forwardTestQueue: {
+    fileExists: true,
+    updatedAt: Date.UTC(2026, 4, 8, 10, 15, 0),
+    logExists: true,
+    logUpdatedAt: Date.UTC(2026, 4, 8, 10, 15, 0),
+    logEventCount: 1,
+    generatedAt: '2026-05-08T10:15:00+00:00',
+    mode: 'forward_observe_queue_only',
+    sourceBacktestGeneratedAt: '2026-05-08T09:45:00+00:00',
+    activeCount: 1,
+    active: [
+      {
+        candidate_key: 'intraday-breakout-fast:SOL:35m:breakout:fe0b6add4327',
+        strategy_id: 'intraday-breakout-fast',
+        strategy_name: 'Fast Breakout',
+        symbol: 'SOL',
+        timeframe: '35m',
+        logic: 'breakout',
+        params: { lookback: 10, hold: 4 },
+        score_pct: 0.0674,
+        sample: 14,
+        max_drawdown_pct: 2.5479,
+        risk_gate: { status: 'pass', violations: [] },
+        concilium_review: {
+          recommendation: 'WATCH',
+          reason_code: 'needs_more_forward_evidence',
+          confidence: 70,
+        },
+        status: 'queued_forward_observe',
+        queue_reason: 'concilium_watch_risk_gate_passed',
+        observe_only: true,
+        execution_enabled: false,
+        paper_promoted: false,
+      },
+    ],
+    safety: {
+      observeOnly: true,
+      executionEnabled: false,
+      demoTradingEnabled: false,
+      liveTradingEnabled: false,
+      registryMutated: false,
+      paperPromoted: false,
+      brokerCallsAllowed: false,
+    },
+  },
   backtestData: {
     source: 'CoinGecko free',
     fetcher: 'vt_capital.fetch_candles',
@@ -614,6 +659,14 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('backtest analyst: support')
     expect(container.textContent).toContain('risk gatekeeper: oppose')
     expect(container.textContent).toContain('max_dca_underwater_exceeded')
+    expect(container.textContent).toContain('Forward Queue')
+    expect(container.textContent).toContain('1 attivi')
+    expect(container.textContent).toContain('Queue filepresente')
+    expect(container.textContent).toContain('Safetyobserve only')
+    expect(container.textContent).toContain('Fast Breakout · SOL 35m')
+    expect(container.textContent).toContain('queued_forward_observe')
+    expect(container.textContent).toContain('concilium_watch_risk_gate_passed')
+    expect(container.textContent).toContain('paper_promoted=false')
     await clickButtonContaining(container, 'Portafoglio')
     expect(container.textContent).toContain('Portafoglio attivo')
     expect(container.textContent).toContain('PnL non realizzato')

@@ -37,6 +37,14 @@ const VT_STRATEGY_TEST_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/strategies/strategy-test-log.jsonl',
 )
+const VT_FORWARD_TEST_QUEUE_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/forward-test-queue.json',
+)
+const VT_FORWARD_TEST_QUEUE_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/strategies/forward-test-queue.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -761,6 +769,44 @@ export function summarizeStrategyTestLogs(
   }
 }
 
+export function readForwardTestQueue(): JsonRecord {
+  const stat = safeStat(VT_FORWARD_TEST_QUEUE_PATH)
+  const logStat = safeStat(VT_FORWARD_TEST_QUEUE_LOG_PATH)
+  const raw = readJsonFile(VT_FORWARD_TEST_QUEUE_PATH)
+  const active = Array.isArray(raw?.active) ? raw.active : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_FORWARD_TEST_QUEUE_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string' ? raw.mode : 'forward_observe_queue_only',
+    sourceBacktestGeneratedAt:
+      typeof raw?.source_backtest_generated_at === 'string'
+        ? raw.source_backtest_generated_at
+        : null,
+    activeCount:
+      typeof raw?.active_count === 'number' ? raw.active_count : active.length,
+    active,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      executionEnabled: safety.execution_enabled === true,
+      demoTradingEnabled: safety.demo_trading_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      registryMutated: safety.registry_mutated === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
 export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
@@ -864,6 +910,8 @@ export const Route = createFileRoute('/api/vt-capital')({
             strategyRegistry: VT_STRATEGY_REGISTRY_PATH,
             backtestResults: VT_BACKTEST_RESULTS_PATH,
             strategyTestLog: VT_STRATEGY_TEST_LOG_PATH,
+            forwardTestQueue: VT_FORWARD_TEST_QUEUE_PATH,
+            forwardTestQueueLog: VT_FORWARD_TEST_QUEUE_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -884,6 +932,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           autoresearch: readAutoresearchConfig(),
           strategyRegistry: readStrategyRegistry(),
           backtestResults: readBacktestResults(),
+          forwardTestQueue: readForwardTestQueue(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,

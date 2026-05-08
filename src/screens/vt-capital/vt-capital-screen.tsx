@@ -184,6 +184,28 @@ type StrategyTestLogPayload = {
   recent: Array<Record<string, unknown>>
 }
 
+type ForwardTestQueuePayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists: boolean
+  logUpdatedAt: number | null
+  logEventCount: number
+  generatedAt: string | null
+  mode: string
+  sourceBacktestGeneratedAt: string | null
+  activeCount: number
+  active: Array<Record<string, unknown>>
+  safety: {
+    observeOnly: boolean
+    executionEnabled: boolean
+    demoTradingEnabled: boolean
+    liveTradingEnabled: boolean
+    registryMutated: boolean
+    paperPromoted: boolean
+    brokerCallsAllowed: boolean
+  }
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -238,6 +260,7 @@ type VtPayload = {
   autoresearch?: AutoResearchPayload
   strategyRegistry?: StrategyRegistryPayload
   backtestResults?: BacktestResultPayload
+  forwardTestQueue?: ForwardTestQueuePayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -2318,6 +2341,114 @@ export function VtCapitalScreen() {
                       : '—'
                   }
                 />
+              </div>
+              <div className="mt-4 rounded-xl border p-3 text-sm text-muted">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-ink">Forward Queue</div>
+                    <div className="text-xs">
+                      Observe-only: candidati che hanno passato risk gate e
+                      Concilium.
+                    </div>
+                  </div>
+                  <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                    {data.forwardTestQueue?.activeCount ?? 0} attivi
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <Metric
+                    label="Queue file"
+                    value={
+                      data.forwardTestQueue?.fileExists ? 'presente' : 'manca'
+                    }
+                    tone={data.forwardTestQueue?.fileExists ? 'good' : 'warn'}
+                  />
+                  <Metric
+                    label="Eventi queue"
+                    value={data.forwardTestQueue?.logEventCount ?? 0}
+                  />
+                  <Metric
+                    label="Safety"
+                    value={
+                      data.forwardTestQueue?.safety?.executionEnabled
+                        ? 'execution on'
+                        : 'observe only'
+                    }
+                    tone={
+                      data.forwardTestQueue?.safety?.executionEnabled
+                        ? 'bad'
+                        : 'good'
+                    }
+                  />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(data.forwardTestQueue?.active ?? []).length ? (
+                    (data.forwardTestQueue?.active ?? []).map(
+                      (candidate, candidateIndex) => {
+                        const review = asRecord(candidate.concilium_review)
+                        const riskGate = asRecord(candidate.risk_gate)
+                        return (
+                          <div
+                            key={`${String(candidate.candidate_key ?? 'candidate')}-${candidateIndex}`}
+                            className="rounded-lg border p-3"
+                            style={{
+                              background: 'var(--theme-card2)',
+                              borderColor: 'var(--theme-border)',
+                            }}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-semibold text-ink">
+                                {String(
+                                  candidate.strategy_name ??
+                                    candidate.strategy_id ??
+                                    'strategia',
+                                )}{' '}
+                                · {String(candidate.symbol ?? 'asset')}{' '}
+                                {String(candidate.timeframe ?? 'tf')}
+                              </div>
+                              <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase">
+                                {String(candidate.status ?? 'queued')}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+                              <span>
+                                logic: {String(candidate.logic ?? '—')}
+                              </span>
+                              <span>
+                                score: {formatPct(Number(candidate.score_pct))}
+                              </span>
+                              <span>
+                                sample: {String(candidate.sample ?? '—')}
+                              </span>
+                              <span>
+                                drawdown:{' '}
+                                {formatPct(Number(candidate.max_drawdown_pct))}
+                              </span>
+                              <span>
+                                Concilium:{' '}
+                                {String(review?.recommendation ?? '—')} ·{' '}
+                                {String(review?.reason_code ?? '—')}
+                              </span>
+                              <span>
+                                risk gate: {String(riskGate?.status ?? '—')}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-[11px] text-muted">
+                              reason: {String(candidate.queue_reason ?? '—')} ·
+                              params: {compactJson(candidate.params ?? {})} ·
+                              broker off · paper_promoted=false
+                            </div>
+                          </div>
+                        )
+                      },
+                    )
+                  ) : (
+                    <div className="rounded-lg border p-3 text-xs">
+                      Nessun candidato in forward observe. Serve WATCH + risk
+                      gate pass.
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="mt-4 grid gap-2 text-sm text-muted">
                 {strategies.map((strategy) => (
