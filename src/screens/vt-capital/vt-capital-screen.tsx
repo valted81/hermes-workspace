@@ -1556,6 +1556,84 @@ export function VtCapitalScreen() {
     [data],
   )
 
+  const operationalUnlocks = useMemo(() => {
+    const waitingPacket = asRecord(data?.manualPaperReview?.waiting?.[0])
+    const eligiblePacket = asRecord(data?.manualPaperReview?.eligible?.[0])
+    const packet = waitingPacket ?? eligiblePacket
+    const evidence = asRecord(packet?.evidence)
+    const thresholds = asRecord(evidence?.thresholds)
+    const violations = Array.isArray(evidence?.violations)
+      ? evidence.violations.map(String)
+      : []
+    const observationCount = safeNumber(evidence?.observation_count)
+    const minObservations = safeNumber(thresholds?.min_observations)
+    const totalSample = safeNumber(evidence?.total_sample)
+    const minSample = safeNumber(thresholds?.min_sample)
+    const worstDrawdown = safeNumber(evidence?.worst_drawdown_pct)
+    const maxDrawdown = safeNumber(thresholds?.max_drawdown_pct)
+    const latestDecision = asRecord(data?.runtimeConcilium?.decisions?.[0])
+    const approvalBlock = asRecord(data?.runtimeManualApproval?.blockedDecisions?.[0])
+    const proposalHold = asRecord(data?.runtimeOrderProposals?.heldDecisions?.[0])
+    const guardianHold = asRecord(data?.runtimeGuardianReview?.heldDecisions?.[0])
+
+    return [
+      {
+        label: 'Forward evidence',
+        status:
+          minObservations > 0 && observationCount >= minObservations
+            ? 'ok'
+            : 'attesa',
+        value:
+          minObservations > 0
+            ? `${observationCount}/${minObservations} osservazioni`
+            : `${observationCount} osservazioni`,
+        detail: `Sample ${totalSample}/${minSample || '—'} · DD ${formatPct(worstDrawdown)} / limite ${formatPct(maxDrawdown)}`,
+      },
+      {
+        label: 'Manual review packet',
+        status: (data?.manualPaperReview?.eligibleCount ?? 0) > 0 ? 'ok' : 'attesa',
+        value: String(packet?.status ?? 'nessun packet'),
+        detail:
+          violations.length > 0
+            ? `blocco: ${violations.join(', ')}`
+            : `reason: ${String(packet?.reason_code ?? '—')}`,
+      },
+      {
+        label: 'Runtime Concilium',
+        status: latestDecision?.decision === 'MANUAL_REVIEW' ? 'ok' : 'attesa',
+        value: String(latestDecision?.decision ?? 'nessuna decisione'),
+        detail: `reason: ${String(latestDecision?.reason_code ?? '—')} · confidence ${String(latestDecision?.confidence ?? '—')}`,
+      },
+      {
+        label: 'Approval Valerio',
+        status: (data?.runtimeManualApproval?.requestCount ?? 0) > 0 ? 'azione' : 'bloccato',
+        value: `${data?.runtimeManualApproval?.requestCount ?? 0} richieste`,
+        detail:
+          approvalBlock != null
+            ? `non pronto: ${String(approvalBlock.reason_code ?? '—')}`
+            : 'quando appare qui, serve approvazione esplicita PAPER_OBSERVE',
+      },
+      {
+        label: 'Order proposal',
+        status: (data?.runtimeOrderProposals?.proposalCount ?? 0) > 0 ? 'ok' : 'bloccato',
+        value: `${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte`,
+        detail:
+          proposalHold != null
+            ? `trattenuta: ${String(proposalHold.reason_code ?? '—')}`
+            : 'nessuna proposta inviata al Guardian',
+      },
+      {
+        label: 'Guardian review',
+        status: (data?.runtimeGuardianReview?.reviewCount ?? 0) > 0 ? 'ok' : 'bloccato',
+        value: `${data?.runtimeGuardianReview?.reviewCount ?? 0} controlli`,
+        detail:
+          guardianHold != null
+            ? `in attesa: ${String(guardianHold.reason_code ?? '—')}`
+            : 'Guardian pronto, ma non ha proposal da validare',
+      },
+    ]
+  }, [data])
+
   if (loading)
     return (
       <div className="flex h-full items-center justify-center text-muted">
@@ -1840,6 +1918,74 @@ export function VtCapitalScreen() {
                   tone={activeWorkers > 0 ? 'good' : 'warn'}
                 />
               </div>
+
+              <div
+                className="mb-5 rounded-xl border p-4"
+                style={{
+                  background:
+                    'linear-gradient(135deg, color-mix(in srgb, var(--theme-card2) 92%, var(--theme-accent)), var(--theme-card2))',
+                  borderColor: 'var(--theme-border)',
+                }}
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      Sblocchi manuali
+                    </div>
+                    <div className="text-base font-bold text-ink">
+                      Perché non sta ancora andando in paper/demo
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted">
+                    checklist viva: soglia → review → approvazione → Guardian
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {operationalUnlocks.map((item) => {
+                    const tone =
+                      item.status === 'ok'
+                        ? 'var(--theme-success)'
+                        : item.status === 'azione'
+                          ? 'var(--theme-accent)'
+                          : item.status === 'attesa'
+                            ? 'var(--theme-warning)'
+                            : 'var(--theme-danger)'
+                    return (
+                      <div
+                        key={item.label}
+                        className="rounded-lg border p-3"
+                        style={{
+                          background: 'var(--theme-card)',
+                          borderColor: `color-mix(in srgb, ${tone} 42%, var(--theme-border))`,
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-sm font-semibold text-ink">
+                            {item.label}
+                          </div>
+                          <span
+                            className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+                            style={{
+                              borderColor: `color-mix(in srgb, ${tone} 50%, var(--theme-border))`,
+                              color: tone,
+                              background: `color-mix(in srgb, ${tone} 10%, transparent)`,
+                            }}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-sm font-bold text-ink">
+                          {item.value}
+                        </div>
+                        <div className="mt-1 text-xs leading-snug text-muted">
+                          {item.detail}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               {(['core', 'strategy', 'agent', 'queue', 'missing'] as const).map(
                 (group) => (
                   <div key={group} className="mb-4">
