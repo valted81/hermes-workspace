@@ -293,6 +293,24 @@ type RuntimeOrderProposalsPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeGuardianReviewPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  proposalCount: number
+  reviewCount: number
+  approvedCount: number
+  rejectedCount: number
+  heldCount: number
+  reviews: Array<Record<string, unknown>>
+  heldDecisions: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -352,6 +370,7 @@ type VtPayload = {
   manualPaperReview?: ManualPaperReviewPayload
   runtimeConcilium?: RuntimeConciliumPayload
   runtimeOrderProposals?: RuntimeOrderProposalsPayload
+  runtimeGuardianReview?: RuntimeGuardianReviewPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1407,6 +1426,61 @@ export function VtCapitalScreen() {
         output: 'Score provvisorio, PnL, rischio, PAPER rate e prossimi gap.',
         next: 'Aggiungere storico chiuso: win-rate, expectancy e drawdown reale per strategy_id.',
       },
+      {
+        id: 'autoresearch-lab',
+        title: 'AutoResearch Lab',
+        group: 'strategy',
+        status: data?.autoresearch?.enabled ? 'online' : 'blocked',
+        summary: `${data?.autoresearch?.mode ?? 'n/d'} · non fa execution.`,
+        does: 'Ricerca varianti, genera strategy.py sandbox, backtesta, fa walk-forward e logga ogni test.',
+        input: 'Registry strategie, candele locali, moduli sandbox e config autoresearch.',
+        output: 'Risultati backtest, strategy-test-log, forward queue e manual review packet.',
+        next: 'Accumulo storico forward su più giorni prima di proporre paper observe.',
+      },
+      {
+        id: 'runtime-concilium',
+        title: 'Runtime Concilium operativo',
+        group: 'queue',
+        status: (data?.runtimeConcilium?.decisionCount ?? 0) > 0 ? 'observe' : 'missing',
+        summary: `${data?.runtimeConcilium?.decisionCount ?? 0} decisioni · usa profili agenti come ruoli.`,
+        does: 'Legge i packet manual-review e decide WATCH/MANUAL_REVIEW/PAPER_OBSERVE in modo read-only.',
+        input: 'Manual review packets e ruoli tradinganalyst/macronewsscout/riskmanager/strategyreviewer/operationswatcher.',
+        output: 'data/runtime/concilium-decisions.json/jsonl.',
+        next: 'Far entrare segnali runtime reali, non solo packet da AutoResearch.',
+      },
+      {
+        id: 'order-proposals-runtime',
+        title: 'Order Proposal Draft',
+        group: 'queue',
+        status: (data?.runtimeOrderProposals?.proposalCount ?? 0) > 0 ? 'observe' : 'blocked',
+        summary: `${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte · ${data?.runtimeOrderProposals?.heldCount ?? 0} trattenute.`,
+        does: 'Trasforma solo PAPER_OBSERVE espliciti in proposta ordine canonica per il Guardian.',
+        input: 'Decisioni Runtime Concilium con order_proposal_allowed=true.',
+        output: 'data/runtime/order-proposals.json/jsonl, broker_submitted=false.',
+        next: 'Collegare Guardian Risk check read-only alle proposal, senza broker.',
+      },
+      {
+        id: 'guardian-review-runtime',
+        title: 'Guardian Review read-only',
+        group: 'queue',
+        status: (data?.runtimeGuardianReview?.reviewCount ?? 0) > 0 ? 'observe' : 'blocked',
+        summary: `${data?.runtimeGuardianReview?.reviewCount ?? 0} review · ${data?.runtimeGuardianReview?.approvedCount ?? 0} ok · ${data?.runtimeGuardianReview?.rejectedCount ?? 0} reject.`,
+        does: 'Valida le order proposal con policy deterministica, ma non approva rischio operativo né invia broker.',
+        input: 'data/runtime/order-proposals.json.',
+        output: 'data/runtime/guardian-review.json/jsonl, execution sempre false.',
+        next: 'Quando Valerio approva una proposal, usare questo gate prima del paper/demo observe.',
+      },
+      {
+        id: 'missing-paper-bridge',
+        title: 'Ponte paper/demo controllato',
+        group: 'missing',
+        status: 'blocked',
+        summary: 'Non ancora attivo: serve approvazione manuale e Guardian check.',
+        does: 'Sarà il passaggio da proposta ordine a paper/demo observe, non a live trading.',
+        input: 'Order proposal approvata da Valerio + Guardian Risk.',
+        output: 'Trade paper/demo osservabile con PnL, invalidation e audit.',
+        next: 'Implementare Guardian review delle proposal runtime come prossimo step sicuro.',
+      },
     ]
   }, [data, performance, strategyCounts])
   const selectedMapNode =
@@ -1417,6 +1491,42 @@ export function VtCapitalScreen() {
           (worker) => `agent-${worker.workerId}` === selectedMapNode.id,
         ) ?? null)
       : null
+  const projectRealityCards = useMemo(
+    () => [
+      {
+        title: 'Va da solo adesso',
+        tone: 'good' as const,
+        items: [
+          `AutoResearch lab: ${data?.autoresearch?.enabled ? 'attivo' : 'spento'} · ${data?.autoresearch?.mode ?? 'n/d'}`,
+          `Backtest/log test: ${data?.strategyTestLogs?.eventCount ?? 0} eventi salvati`,
+          `Forward observe: ${data?.forwardTestQueue?.activeCount ?? 0} candidato/i in coda`,
+          `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
+        ],
+      },
+      {
+        title: 'Si ferma apposta',
+        tone: 'warn' as const,
+        items: [
+          `Manual review: ${data?.manualPaperReview?.eligibleCount ?? 0} pronti · ${data?.manualPaperReview?.waitingCount ?? 0} in attesa`,
+          `Order proposal: ${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte · ${data?.runtimeOrderProposals?.heldCount ?? 0} trattenute`,
+          `Guardian review: ${data?.runtimeGuardianReview?.reviewCount ?? 0} controlli · ${data?.runtimeGuardianReview?.heldCount ?? 0} in attesa`,
+          `Execution flag: ${data?.plugin.executionEnabled ? 'ON - da verificare' : 'OFF'}`,
+          `Live trading: ${data?.guardian?.liveBlocked ? 'bloccato' : 'stato da verificare'}`,
+        ],
+      },
+      {
+        title: 'Manca per trading reale',
+        tone: 'danger' as const,
+        items: [
+          'approvazione manuale Valerio → PAPER_OBSERVE',
+          'Guardian check collegato alle proposal runtime',
+          'paper/demo observe alimentato dal Concilium operativo',
+          'DCA/investimenti separati dal trading intraday',
+        ],
+      },
+    ],
+    [data],
+  )
 
   if (loading)
     return (
@@ -1649,6 +1759,33 @@ export function VtCapitalScreen() {
               }
               accent="var(--theme-accent-secondary)"
             >
+              <div className="mb-4 grid gap-3 lg:grid-cols-3">
+                {projectRealityCards.map((card) => (
+                  <div
+                    key={card.title}
+                    className="rounded-xl border p-3"
+                    style={{
+                      background: 'var(--theme-card2)',
+                      borderColor:
+                        card.tone === 'good'
+                          ? 'color-mix(in srgb, var(--theme-success) 45%, var(--theme-border))'
+                          : card.tone === 'warn'
+                            ? 'color-mix(in srgb, var(--theme-warning) 45%, var(--theme-border))'
+                            : 'color-mix(in srgb, var(--theme-danger) 45%, var(--theme-border))',
+                    }}
+                  >
+                    <div className="text-sm font-bold text-ink">{card.title}</div>
+                    <ul className="mt-2 space-y-1 text-xs text-muted">
+                      {card.items.map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <span aria-hidden>•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-4">
                 <Metric
                   label="Live trading"

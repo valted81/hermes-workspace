@@ -6,6 +6,7 @@ import {
   readForwardTestQueue,
   readManualPaperReview,
   readRuntimeConcilium,
+  readRuntimeGuardianReview,
   readRuntimeOrderProposals,
   resolveGuardianOrderEvents,
   summarizeBacktestData,
@@ -222,6 +223,18 @@ describe('VT Capital backtest data API summary', () => {
       timeframe: '35m',
       status: 'WAITING_MORE_FORWARD_EVIDENCE',
       proposed_manual_action: 'keep_forward_observe',
+    })
+  })
+
+  it('reads runtime Guardian review state safely', () => {
+    const summary = readRuntimeGuardianReview()
+
+    expect(summary).toHaveProperty('reviewCount')
+    expect(summary).toHaveProperty('heldCount')
+    expect(summary.safety).toMatchObject({
+      observeOnly: true,
+      executionEnabled: false,
+      brokerCallsAllowed: false,
     })
   })
 

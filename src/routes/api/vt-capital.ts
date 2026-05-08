@@ -77,6 +77,14 @@ const VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/runtime/order-proposals.jsonl',
 )
+const VT_RUNTIME_GUARDIAN_REVIEW_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/guardian-review.json',
+)
+const VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/guardian-review.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -1039,6 +1047,55 @@ export function readRuntimeOrderProposals(): JsonRecord {
   }
 }
 
+export function readRuntimeGuardianReview(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_GUARDIAN_REVIEW_PATH)
+  const logStat = safeStat(VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_GUARDIAN_REVIEW_PATH)
+  const reviews = Array.isArray(raw?.reviews) ? raw.reviews : []
+  const heldDecisions = Array.isArray(raw?.held_decisions)
+    ? raw.held_decisions
+    : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_guardian_review_read_only',
+    proposalCount:
+      typeof raw?.proposal_count === 'number'
+        ? raw.proposal_count
+        : reviews.length,
+    reviewCount:
+      typeof raw?.review_count === 'number' ? raw.review_count : reviews.length,
+    approvedCount:
+      typeof raw?.approved_count === 'number' ? raw.approved_count : 0,
+    rejectedCount:
+      typeof raw?.rejected_count === 'number' ? raw.rejected_count : 0,
+    heldCount:
+      typeof raw?.held_count === 'number' ? raw.held_count : heldDecisions.length,
+    reviews,
+    heldDecisions,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      riskChecked: safety.risk_checked === true,
+      approvedByRisk: safety.approved_by_risk === true,
+      executionEnabled: safety.execution_enabled === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
 export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
@@ -1152,6 +1209,8 @@ export const Route = createFileRoute('/api/vt-capital')({
             runtimeConciliumLog: VT_RUNTIME_CONCILIUM_LOG_PATH,
             runtimeOrderProposals: VT_RUNTIME_ORDER_PROPOSALS_PATH,
             runtimeOrderProposalsLog: VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH,
+            runtimeGuardianReview: VT_RUNTIME_GUARDIAN_REVIEW_PATH,
+            runtimeGuardianReviewLog: VT_RUNTIME_GUARDIAN_REVIEW_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -1177,6 +1236,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           manualPaperReview: readManualPaperReview(),
           runtimeConcilium: readRuntimeConcilium(),
           runtimeOrderProposals: readRuntimeOrderProposals(),
+          runtimeGuardianReview: readRuntimeGuardianReview(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,
