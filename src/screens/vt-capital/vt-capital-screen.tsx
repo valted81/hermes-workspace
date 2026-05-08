@@ -2494,6 +2494,52 @@ export function VtCapitalScreen() {
                   </div>
                 ) : null}
               </div>
+              <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Posizioni paper locali aperte
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimePaperPositions?.positions ?? [])
+                    .filter((position) => String(position.status ?? '') === 'OPEN')
+                    .slice(0, 5)
+                    .map((position, index) => (
+                      <div
+                        key={`${String(position.position_id ?? index)}`}
+                        className="rounded-lg border p-3 text-xs"
+                        style={{
+                          background: 'var(--theme-card2)',
+                          borderColor: 'var(--theme-border)',
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground">
+                            {String(position.symbol ?? '—')} · {String(position.strategy_id ?? '—')}
+                          </span>
+                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                            paper locale · broker off
+                          </span>
+                        </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                          <span>entry: {String(position.entry_price ?? '—')}</span>
+                          <span>last: {String(position.last_price ?? '—')}</span>
+                          <span>PnL: {String(position.unrealized_pnl_pct ?? '—')}%</span>
+                          <span>size: {String(position.notional_usdt ?? '—')} USDT</span>
+                          <span>stop: {String(position.stop_loss ?? '—')}</span>
+                          <span>TP: {String(position.take_profit ?? '—')}</span>
+                          <span>Guardian: {String(position.guardian_approval_id ?? '—').slice(0, 8)}</span>
+                          <span>opened: {formatIsoTime(position.opened_at)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  {(data.runtimePaperPositions?.positions ?? []).filter(
+                    (position) => String(position.status ?? '') === 'OPEN',
+                  ).length === 0 ? (
+                    <div className="text-xs text-muted">
+                      Nessuna posizione paper locale aperta.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </Card>
           </div>
         ) : null}
