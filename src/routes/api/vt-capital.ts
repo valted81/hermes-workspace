@@ -61,6 +61,22 @@ const VT_MANUAL_REVIEW_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/strategies/manual-paper-review.jsonl',
 )
+const VT_RUNTIME_CONCILIUM_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/concilium-decisions.json',
+)
+const VT_RUNTIME_CONCILIUM_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/concilium-decisions.jsonl',
+)
+const VT_RUNTIME_ORDER_PROPOSALS_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/order-proposals.json',
+)
+const VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/order-proposals.jsonl',
+)
 const TRADING_NOTES_DIR = '/root/hermes-vault/03-Trading-Notes'
 const SESSION_NOTES_DIR = '/root/hermes-vault/01-Sessioni'
 const HOURLY_BIAS_PATH = path.join(
@@ -935,6 +951,94 @@ export function readManualPaperReview(): JsonRecord {
   }
 }
 
+export function readRuntimeConcilium(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_CONCILIUM_PATH)
+  const logStat = safeStat(VT_RUNTIME_CONCILIUM_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_CONCILIUM_PATH)
+  const decisions = Array.isArray(raw?.decisions) ? raw.decisions : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_CONCILIUM_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_concilium_observe_only',
+    decisionCount:
+      typeof raw?.decision_count === 'number'
+        ? raw.decision_count
+        : decisions.length,
+    decisionCounts:
+      raw?.decision_counts && typeof raw.decision_counts === 'object'
+        ? raw.decision_counts
+        : {},
+    agentProfiles: Array.isArray(raw?.agent_profiles) ? raw.agent_profiles : [],
+    decisions,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      executionEnabled: safety.execution_enabled === true,
+      demoTradingEnabled: safety.demo_trading_enabled === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      registryMutated: safety.registry_mutated === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
+export function readRuntimeOrderProposals(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_ORDER_PROPOSALS_PATH)
+  const logStat = safeStat(VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_ORDER_PROPOSALS_PATH)
+  const proposals = Array.isArray(raw?.proposals) ? raw.proposals : []
+  const heldDecisions = Array.isArray(raw?.held_decisions)
+    ? raw.held_decisions
+    : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_order_proposals_observe_only',
+    proposalCount:
+      typeof raw?.proposal_count === 'number'
+        ? raw.proposal_count
+        : proposals.length,
+    heldCount:
+      typeof raw?.held_count === 'number'
+        ? raw.held_count
+        : heldDecisions.length,
+    proposals,
+    heldDecisions,
+    safety: {
+      observeOnly: safety.observe_only !== false,
+      riskChecked: safety.risk_checked === true,
+      approvedByRisk: safety.approved_by_risk === true,
+      executionEnabled: safety.execution_enabled === true,
+      paperPromoted: safety.paper_promoted === true,
+      brokerCallsAllowed: safety.broker_calls_allowed === true,
+    },
+  }
+}
+
 export function summarizeBacktestData(): JsonRecord {
   const stat = safeStat(VT_BACKTEST_DATA_DIR)
   const files = stat
@@ -1044,6 +1148,10 @@ export const Route = createFileRoute('/api/vt-capital')({
             forwardPerformanceLog: VT_FORWARD_PERFORMANCE_LOG_PATH,
             manualPaperReview: VT_MANUAL_REVIEW_PATH,
             manualPaperReviewLog: VT_MANUAL_REVIEW_LOG_PATH,
+            runtimeConcilium: VT_RUNTIME_CONCILIUM_PATH,
+            runtimeConciliumLog: VT_RUNTIME_CONCILIUM_LOG_PATH,
+            runtimeOrderProposals: VT_RUNTIME_ORDER_PROPOSALS_PATH,
+            runtimeOrderProposalsLog: VT_RUNTIME_ORDER_PROPOSALS_LOG_PATH,
             home: os.homedir(),
           },
           marketBias: {
@@ -1067,6 +1175,8 @@ export const Route = createFileRoute('/api/vt-capital')({
           forwardTestQueue: readForwardTestQueue(),
           forwardPerformance: readForwardPerformance(),
           manualPaperReview: readManualPaperReview(),
+          runtimeConcilium: readRuntimeConcilium(),
+          runtimeOrderProposals: readRuntimeOrderProposals(),
           strategyTestLogs: summarizeStrategyTestLogs(
             strategyTestLogRecords,
             strategyTestLogCount,

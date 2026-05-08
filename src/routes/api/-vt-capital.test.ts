@@ -5,6 +5,8 @@ import {
   readForwardPerformance,
   readForwardTestQueue,
   readManualPaperReview,
+  readRuntimeConcilium,
+  readRuntimeOrderProposals,
   resolveGuardianOrderEvents,
   summarizeBacktestData,
   summarizeCouncilHistory,
@@ -392,5 +394,30 @@ describe('VT Capital council and portfolio summaries', () => {
         },
       ],
     })
+  })
+})
+
+
+describe('VT Capital runtime Concilium API summary', () => {
+  it('reads runtime Concilium and order proposals as observe-only sections', () => {
+    const concilium = readRuntimeConcilium()
+    const proposals = readRuntimeOrderProposals()
+
+    expect(concilium.mode).toBe('runtime_concilium_observe_only')
+    expect(concilium.safety).toMatchObject({
+      observeOnly: true,
+      executionEnabled: false,
+      brokerCallsAllowed: false,
+    })
+    expect(Array.isArray(concilium.decisions)).toBe(true)
+
+    expect(proposals.mode).toBe('runtime_order_proposals_observe_only')
+    expect(proposals.safety).toMatchObject({
+      observeOnly: true,
+      approvedByRisk: false,
+      executionEnabled: false,
+      brokerCallsAllowed: false,
+    })
+    expect(Array.isArray(proposals.proposals)).toBe(true)
   })
 })
