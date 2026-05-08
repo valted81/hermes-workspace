@@ -437,6 +437,69 @@ const payload = {
       brokerCallsAllowed: false,
     },
   },
+  runtimeConcilium: {
+    fileExists: true,
+    updatedAt: Date.UTC(2026, 4, 8, 10, 45, 0),
+    logExists: true,
+    logUpdatedAt: Date.UTC(2026, 4, 8, 10, 45, 0),
+    logEventCount: 1,
+    generatedAt: '2026-05-08T10:45:00+00:00',
+    mode: 'runtime_concilium_observe_only',
+    decisionCount: 1,
+    decisionCounts: { WATCH: 1 },
+    agentProfiles: [
+      'tradinganalyst',
+      'macronewsscout',
+      'riskmanager',
+      'strategyreviewer',
+      'operationswatcher',
+    ],
+    decisions: [
+      {
+        decision_id: 'runtime-concilium:intraday-breakout-fast:SOL:35m',
+        strategy_id: 'intraday-breakout-fast',
+        symbol: 'SOL',
+        timeframe: '35m',
+        decision: 'WATCH',
+        reason_code: 'forward_observations_below_minimum',
+        confidence: 55,
+      },
+    ],
+    safety: {
+      observe_only: true,
+      execution_enabled: false,
+      broker_calls_allowed: false,
+      paper_promoted: false,
+    },
+  },
+  runtimeOrderProposals: {
+    fileExists: true,
+    updatedAt: Date.UTC(2026, 4, 8, 10, 45, 0),
+    logExists: true,
+    logUpdatedAt: Date.UTC(2026, 4, 8, 10, 45, 0),
+    logEventCount: 0,
+    generatedAt: '2026-05-08T10:45:00+00:00',
+    mode: 'runtime_order_proposals_observe_only',
+    proposalCount: 0,
+    heldCount: 1,
+    proposals: [],
+    heldDecisions: [
+      {
+        strategy_id: 'intraday-breakout-fast',
+        symbol: 'SOL',
+        timeframe: '35m',
+        decision: 'WATCH',
+        reason_code: 'forward_observations_below_minimum',
+      },
+    ],
+    safety: {
+      observe_only: true,
+      execution_enabled: false,
+      broker_calls_allowed: false,
+      approved_by_risk: false,
+      paper_promoted: false,
+    },
+  },
   backtestData: {
     source: 'CoinGecko free',
     fetcher: 'vt_capital.fetch_candles',
@@ -705,6 +768,12 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('SHADOW_CONTROLLER_TICK')
     expect(container.textContent).toContain('agents-vt-capital-shadow')
     expect(container.textContent).toContain('broker non fornito')
+    expect(container.textContent).toContain('Concilium operativo')
+    expect(container.textContent).toContain('Runtime gate read-only')
+    expect(container.textContent).toContain('Order proposal0')
+    expect(container.textContent).toContain(
+      'forward_observations_below_minimum',
+    )
     expect(container.textContent).toContain('Concilium')
     expect(container.textContent).toContain('Impostazioni')
     await clickButtonContaining(container, 'Strategie')

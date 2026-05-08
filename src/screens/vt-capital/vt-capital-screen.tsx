@@ -263,6 +263,36 @@ type ManualPaperReviewPayload = {
   }
 }
 
+type RuntimeConciliumPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  decisionCount: number
+  decisionCounts: Record<string, number>
+  agentProfiles: Array<string>
+  decisions: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
+type RuntimeOrderProposalsPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  proposalCount: number
+  heldCount: number
+  proposals: Array<Record<string, unknown>>
+  heldDecisions: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -320,6 +350,8 @@ type VtPayload = {
   forwardTestQueue?: ForwardTestQueuePayload
   forwardPerformance?: ForwardPerformancePayload
   manualPaperReview?: ManualPaperReviewPayload
+  runtimeConcilium?: RuntimeConciliumPayload
+  runtimeOrderProposals?: RuntimeOrderProposalsPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1968,6 +2000,83 @@ export function VtCapitalScreen() {
                 </pre>
               ) : null}
             </Card>
+
+            <Card title="Concilium operativo" accent="var(--theme-primary)">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Runtime gate read-only
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Metric
+                  label="Decisioni"
+                  value={data.runtimeConcilium?.decisionCount ?? 0}
+                  tone={
+                    (data.runtimeConcilium?.decisionCount ?? 0) > 0
+                      ? 'good'
+                      : 'neutral'
+                  }
+                />
+                <Metric
+                  label="Order proposal"
+                  value={data.runtimeOrderProposals?.proposalCount ?? 0}
+                  tone={
+                    (data.runtimeOrderProposals?.proposalCount ?? 0) > 0
+                      ? 'warn'
+                      : 'good'
+                  }
+                />
+                <Metric
+                  label="Held"
+                  value={data.runtimeOrderProposals?.heldCount ?? 0}
+                />
+                <Metric
+                  label="Broker"
+                  value={
+                    data.runtimeOrderProposals?.safety?.brokerCallsAllowed
+                      ? 'abilitato'
+                      : 'off'
+                  }
+                  tone={
+                    data.runtimeOrderProposals?.safety?.brokerCallsAllowed
+                      ? 'warn'
+                      : 'good'
+                  }
+                />
+              </div>
+              <div
+                className="mt-4 rounded-lg border p-3 text-xs text-muted"
+                style={{
+                  background: 'var(--theme-card2)',
+                  borderColor: 'var(--theme-border)',
+                }}
+              >
+                Ponte operativo: manual review → Concilium runtime → order
+                proposal draft → Guardian. Oggi produce solo
+                WATCH/MANUAL_REVIEW; nessun ordine viene inviato.
+              </div>
+              <div className="mt-3 space-y-2">
+                {(data.runtimeConcilium?.decisions ?? [])
+                  .slice(0, 3)
+                  .map((decision, index) => (
+                    <div key={`${String(decision.decision_id ?? index)}`}>
+                      <MiniEvent
+                        label={`${String(decision.strategy_id ?? 'strategy')} · ${String(
+                          decision.decision ?? '—',
+                        )}`}
+                        event={decision}
+                      />
+                      <div className="mt-1 text-[11px] text-muted">
+                        reason: {String(decision.reason_code ?? '—')} · broker
+                        off · approved_by_risk=false
+                      </div>
+                    </div>
+                  ))}
+                {(data.runtimeConcilium?.decisions ?? []).length === 0 ? (
+                  <div className="text-xs text-muted">
+                    Nessuna decisione runtime ancora registrata.
+                  </div>
+                ) : null}
+              </div>
+            </Card>
           </div>
         ) : null}
         {activeTab === 'strategie' ? (
@@ -2429,12 +2538,12 @@ export function VtCapitalScreen() {
                   <Metric
                     label="Safety"
                     value={
-                      data.forwardTestQueue?.safety?.executionEnabled
+                      data.forwardTestQueue?.safety.executionEnabled
                         ? 'execution on'
                         : 'observe only'
                     }
                     tone={
-                      data.forwardTestQueue?.safety?.executionEnabled
+                      data.forwardTestQueue?.safety.executionEnabled
                         ? 'bad'
                         : 'good'
                     }
@@ -2539,12 +2648,12 @@ export function VtCapitalScreen() {
                   <Metric
                     label="Safety perf"
                     value={
-                      data.forwardPerformance?.safety?.brokerCallsAllowed
+                      data.forwardPerformance?.safety.brokerCallsAllowed
                         ? 'broker on'
                         : 'broker off'
                     }
                     tone={
-                      data.forwardPerformance?.safety?.brokerCallsAllowed
+                      data.forwardPerformance?.safety.brokerCallsAllowed
                         ? 'bad'
                         : 'good'
                     }
@@ -2684,7 +2793,7 @@ export function VtCapitalScreen() {
                     </span>
                     <span>
                       safety:{' '}
-                      {data.manualPaperReview?.safety?.brokerCallsAllowed
+                      {data.manualPaperReview?.safety.brokerCallsAllowed
                         ? 'broker on'
                         : 'broker off'}
                     </span>
