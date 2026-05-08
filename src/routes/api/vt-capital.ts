@@ -723,15 +723,40 @@ export function summarizeStrategyTestLogs(
   updatedAt: number | null,
 ): JsonRecord {
   const byStrategy: Record<string, number> = {}
+  const byConcilium: Record<string, number> = {}
+  let latestConcilium: JsonRecord | null = null
+  let conciliumReviewed = 0
+
   for (const record of records) {
     const strategyId = String(record.strategy_id ?? 'unknown')
     byStrategy[strategyId] = (byStrategy[strategyId] ?? 0) + 1
+    const review =
+      record.concilium_review &&
+      typeof record.concilium_review === 'object' &&
+      !Array.isArray(record.concilium_review)
+        ? (record.concilium_review as JsonRecord)
+        : null
+    if (review) {
+      conciliumReviewed += 1
+      const recommendation = String(
+        review.recommendation ?? record.decision ?? 'UNKNOWN',
+      )
+      byConcilium[recommendation] = (byConcilium[recommendation] ?? 0) + 1
+      latestConcilium = review
+    }
   }
   return {
     fileExists: eventCount > 0,
     updatedAt,
     eventCount,
     byStrategy,
+    byConcilium,
+    latestConcilium,
+    concilium: {
+      reviewed: conciliumReviewed,
+      recommendations: byConcilium,
+      latest: latestConcilium,
+    },
     recent: records.slice(-60).reverse(),
   }
 }

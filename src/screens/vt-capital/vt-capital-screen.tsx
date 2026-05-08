@@ -174,6 +174,13 @@ type StrategyTestLogPayload = {
   updatedAt: number | null
   eventCount: number
   byStrategy: Record<string, number>
+  byConcilium?: Record<string, number>
+  latestConcilium?: Record<string, unknown> | null
+  concilium?: {
+    reviewed: number
+    recommendations: Record<string, number>
+    latest: Record<string, unknown> | null
+  }
   recent: Array<Record<string, unknown>>
 }
 
@@ -554,6 +561,22 @@ function compactJson(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function formatConciliumRole(role: unknown): string {
+  const item = asRecord(role)
+  if (!item) return 'ruolo sconosciuto'
+  const roleLabel = String(item.role ?? 'agent').replaceAll('_', ' ')
+  return `${roleLabel}: ${String(item.stance ?? '—')} · ${String(item.reason_code ?? '—')}`
+}
+
+function formatViolations(value: unknown): string {
+  return Array.isArray(value) ? value.map(String).join(', ') : String(value ?? '—')
 }
 
 function formatMoney(value: number | null | undefined): string {
@@ -2264,7 +2287,7 @@ export function VtCapitalScreen() {
         {activeTab === 'log-strategie' ? (
           <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
             <Card title="Log strategie" accent="var(--theme-accent)">
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-4">
                 <Metric
                   label="File log"
                   value={
@@ -2275,6 +2298,15 @@ export function VtCapitalScreen() {
                 <Metric
                   label="Test salvati"
                   value={data.strategyTestLogs?.eventCount ?? 0}
+                />
+                <Metric
+                  label="Concilium WATCH"
+                  value={data.strategyTestLogs?.byConcilium?.WATCH ?? 0}
+                  tone={
+                    (data.strategyTestLogs?.byConcilium?.WATCH ?? 0) > 0
+                      ? 'good'
+                      : 'neutral'
+                  }
                 />
                 <Metric
                   label="Ultimo log"
@@ -2321,6 +2353,13 @@ export function VtCapitalScreen() {
                     const scoreLabel = Number.isFinite(score)
                       ? formatPct(score)
                       : '—'
+                    const conciliumReview = asRecord(log.concilium_review)
+                    const conciliumRoles = Array.isArray(
+                      conciliumReview?.roles,
+                    )
+                      ? conciliumReview.roles
+                      : []
+                    const riskGate = asRecord(log.risk_gate)
                     return (
                       <div
                         key={`${String(log.generated_at ?? 'run')}-${String(log.strategy_id ?? 'strategy')}-${index}`}
@@ -2359,6 +2398,46 @@ export function VtCapitalScreen() {
                             )}
                           </span>
                         </div>
+                        {conciliumReview ? (
+                          <div className="mt-3 rounded-lg border p-2 text-xs">
+                            <div className="flex flex-wrap items-center gap-2 font-semibold text-ink">
+                              <span>Review Concilium</span>
+                              <span>
+                                Concilium:{' '}
+                                {String(
+                                  conciliumReview.recommendation ?? '—',
+                                )}{' '}
+                                · conf{' '}
+                                {String(conciliumReview.confidence ?? '—')}
+                              </span>
+                              <span className="text-muted">
+                                reason:{' '}
+                                {String(
+                                  conciliumReview.reason_code ?? '—',
+                                )}
+                              </span>
+                            </div>
+                            {conciliumRoles.length ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted">
+                                {conciliumRoles.slice(0, 5).map((role, roleIndex) => (
+                                  <span
+                                    key={`${String(log.strategy_id ?? 'strategy')}-role-${roleIndex}`}
+                                    className="rounded-full border px-2 py-0.5"
+                                  >
+                                    {formatConciliumRole(role)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {riskGate ? (
+                              <div className="mt-2 text-[11px] text-muted">
+                                Risk gate: {String(riskGate.status ?? '—')} ·{' '}
+                                violazioni:{' '}
+                                {formatViolations(riskGate.violations)}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <div className="mt-2 text-[11px] text-muted">
                           {formatIsoTime(String(log.generated_at ?? ''))} ·
                           params: {compactJson(log.best_params ?? {})}

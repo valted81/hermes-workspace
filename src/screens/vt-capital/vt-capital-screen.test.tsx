@@ -232,6 +232,15 @@ const payload = {
       'mean-reversion-rsi': 9,
       'dca-core-crypto': 9,
     },
+    byConcilium: {
+      WATCH: 1,
+      DISCARD: 1,
+    },
+    latestConcilium: {
+      recommendation: 'WATCH',
+      confidence: 70,
+      reason_code: 'needs_more_forward_evidence',
+    },
     recent: [
       {
         generated_at: '2026-05-08T09:45:00+00:00',
@@ -247,6 +256,24 @@ const payload = {
         score_pct: 0.1174,
         sample: 21,
         walk_forward: { status: 'pass' },
+        risk_gate: { status: 'pass', violations: [] },
+        concilium_review: {
+          recommendation: 'WATCH',
+          confidence: 70,
+          reason_code: 'needs_more_forward_evidence',
+          roles: [
+            {
+              role: 'backtest_analyst',
+              stance: 'support',
+              reason_code: 'positive_score_and_sample',
+            },
+            {
+              role: 'risk_gatekeeper',
+              stance: 'support',
+              reason_code: 'risk_gate_passed',
+            },
+          ],
+        },
       },
       {
         generated_at: '2026-05-08T09:45:00+00:00',
@@ -262,6 +289,23 @@ const payload = {
         score_pct: 109.7997,
         sample: 180,
         walk_forward: { status: 'pass' },
+        concilium_review: {
+          recommendation: 'DISCARD',
+          confidence: 45,
+          reason_code: 'risk_gate_blocked',
+          roles: [
+            {
+              role: 'backtest_analyst',
+              stance: 'support',
+              reason_code: 'positive_score_and_sample',
+            },
+            {
+              role: 'risk_gatekeeper',
+              stance: 'oppose',
+              reason_code: 'max_dca_underwater_exceeded',
+            },
+          ],
+        },
       },
     ],
   },
@@ -564,6 +608,12 @@ describe('VtCapitalScreen', () => {
     expect(container.textContent).toContain('SOL 35m')
     expect(container.textContent).toContain('logic: breakout')
     expect(container.textContent).toContain('walk-forward: pass')
+    expect(container.textContent).toContain('Review Concilium')
+    expect(container.textContent).toContain('Concilium: WATCH · conf 70')
+    expect(container.textContent).toContain('needs_more_forward_evidence')
+    expect(container.textContent).toContain('backtest analyst: support')
+    expect(container.textContent).toContain('risk gatekeeper: oppose')
+    expect(container.textContent).toContain('max_dca_underwater_exceeded')
     await clickButtonContaining(container, 'Portafoglio')
     expect(container.textContent).toContain('Portafoglio attivo')
     expect(container.textContent).toContain('PnL non realizzato')

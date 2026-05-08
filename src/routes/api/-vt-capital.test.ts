@@ -120,7 +120,7 @@ describe('VT Capital backtest data API summary', () => {
 
     expect(summary).toMatchObject({
       fileExists: true,
-      mode: 'offline_walk_forward_backtest_only',
+      mode: 'offline_walk_forward_risk_gated_dca_robustness_concilium_review_only',
       executionEnabled: false,
     })
     expect(summary.results).toHaveLength(3)
@@ -135,13 +135,31 @@ describe('VT Capital backtest data API summary', () => {
           timeframe: '35m',
           decision: 'WATCH',
           best_logic: 'breakout',
+          concilium_review: {
+            recommendation: 'WATCH',
+            confidence: 70,
+            reason_code: 'needs_more_forward_evidence',
+            roles: [
+              { role: 'backtest_analyst', stance: 'support' },
+              { role: 'risk_gatekeeper', stance: 'support' },
+            ],
+          },
         },
         {
           strategy_id: 'dca-core-crypto',
           symbol: 'BTC',
           timeframe: '1w',
-          decision: 'WATCH',
+          decision: 'DISCARD',
           best_logic: 'smart_dca',
+          concilium_review: {
+            recommendation: 'DISCARD',
+            confidence: 45,
+            reason_code: 'risk_gate_blocked',
+            roles: [
+              { role: 'backtest_analyst', stance: 'support' },
+              { role: 'risk_gatekeeper', stance: 'oppose' },
+            ],
+          },
         },
       ],
       12,
@@ -158,6 +176,19 @@ describe('VT Capital backtest data API summary', () => {
       },
     })
     expect(summary.recent).toHaveLength(2)
+    expect(summary.concilium).toMatchObject({
+      reviewed: 2,
+      recommendations: { WATCH: 1, DISCARD: 1 },
+      latest: {
+        recommendation: 'DISCARD',
+        confidence: 45,
+        reason_code: 'risk_gate_blocked',
+        roles: [
+          { role: 'backtest_analyst', stance: 'support' },
+          { role: 'risk_gatekeeper', stance: 'oppose' },
+        ],
+      },
+    })
   })
 })
 
