@@ -417,6 +417,26 @@ type RuntimeDemoOrderMonitorPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeDemoPositionsPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  positionCount: number
+  openCount: number
+  filledOrderCount: number
+  openOrderCount: number
+  canceledOrderCount: number
+  ignoredOrderCount: number
+  positions: Array<Record<string, unknown>>
+  ignoredOrders: Array<Record<string, unknown>>
+  events: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -483,6 +503,7 @@ type VtPayload = {
   runtimePaperPositions?: RuntimePaperPositionsPayload
   runtimeDemoBridge?: RuntimeDemoBridgePayload
   runtimeDemoOrderMonitor?: RuntimeDemoOrderMonitorPayload
+  runtimeDemoPositions?: RuntimeDemoPositionsPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1700,7 +1721,18 @@ export function VtCapitalScreen() {
         does: 'Invia solo micro ordini al conto demo dopo segnale runtime, Concilium operativo e Guardian APPROVED; il monitor aggiorna stato e cancella ordini demo scaduti.',
         input: 'Order proposal approvata da Guardian + feature flag demo + idempotenza anti-duplicato + monitor TTL.',
         output: 'data/runtime/demo-broker-bridge.json + demo-order-monitor.json con order id demo, stato, scope e cancellazioni stale.',
-        next: 'Monitorare esecuzione/riempimento demo e mostrare stop/TP/PnL broker in dashboard.',
+        next: 'Collegare fill/cancel al ledger posizioni demo e PnL broker consolidato.',
+      },
+      {
+        id: 'runtime-demo-positions',
+        title: 'Posizioni broker demo',
+        group: 'queue',
+        status: (data?.runtimeDemoPositions?.openCount ?? 0) > 0 ? 'demo' : 'observe',
+        summary: `${data?.runtimeDemoPositions?.openCount ?? 0} posizione/i demo aperte · ${data?.runtimeDemoPositions?.canceledOrderCount ?? 0} ordine/i demo cancellati/non filled · live bloccato.`,
+        does: 'Trasforma solo ordini demo realmente filled in posizioni demo broker; gli ordini cancellati restano eventi, non posizioni.',
+        input: 'demo-order-monitor.json con filled/remaining/status aggiornati dal broker demo.',
+        output: 'data/runtime/demo-positions.json/jsonl con posizioni broker demo e ordini ignorati/cancellati.',
+        next: 'Aggiungere PnL broker demo e stop/TP demo quando un ordine viene filled.',
       },
     ]
   }, [data, performance, strategyCounts])
@@ -1725,6 +1757,7 @@ export function VtCapitalScreen() {
           `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
           `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte`,
           `Broker demo: ${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i inviati · ${data?.runtimeDemoOrderMonitor?.openCount ?? 0} aperti · ${data?.runtimeDemoOrderMonitor?.canceledCount ?? 0} annullati`,
+          `Posizioni broker demo: ${data?.runtimeDemoPositions?.openCount ?? 0} aperte · ${data?.runtimeDemoPositions?.ignoredOrderCount ?? 0} ordine/i non filled/cancellati`,
         ],
       },
       {
@@ -1744,7 +1777,7 @@ export function VtCapitalScreen() {
         title: 'Manca per trading reale',
         tone: 'danger' as const,
         items: [
-          'monitorare ordini demo, stop e take profit direttamente dalla dashboard',
+          'PnL broker demo consolidato e stop/TP demo dopo fill reale',
           'DCA/investimenti separati dal trading intraday',
         ],
       },
@@ -2564,6 +2597,11 @@ export function VtCapitalScreen() {
                   }
                   tone={(data.runtimeDemoOrderMonitor?.openCount ?? 0) > 0 ? 'warn' : 'good'}
                 />
+                <Metric
+                  label="Posizioni demo broker"
+                  value={`${data.runtimeDemoPositions?.openCount ?? 0} aperte`}
+                  tone={(data.runtimeDemoPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'}
+                />
               </div>
               <div
                 className="mt-4 rounded-lg border p-3 text-xs text-muted"
@@ -2645,6 +2683,58 @@ export function VtCapitalScreen() {
                       Nessuna posizione paper locale aperta.
                     </div>
                   ) : null}
+                </div>
+              </div>
+              <div className="rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-sm font-semibold text-foreground">
+                  Posizioni broker demo
+                </div>
+                <div className="mb-3 text-xs text-muted">
+                  Questa sezione mostra solo posizioni nate da ordini demo realmente filled. Un ordine limit demo cancellato o non riempito non diventa posizione broker.
+                </div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-4">
+                  <Metric label="Aperte broker demo" value={data.runtimeDemoPositions?.openCount ?? 0} tone={(data.runtimeDemoPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'} />
+                  <Metric label="Ordini filled" value={data.runtimeDemoPositions?.filledOrderCount ?? 0} tone={(data.runtimeDemoPositions?.filledOrderCount ?? 0) > 0 ? 'warn' : 'neutral'} />
+                  <Metric label="Ordini ignorati" value={data.runtimeDemoPositions?.ignoredOrderCount ?? 0} tone={(data.runtimeDemoPositions?.ignoredOrderCount ?? 0) > 0 ? 'good' : 'neutral'} />
+                  <Metric label="Live" value="bloccato" tone="good" />
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimeDemoPositions?.positions ?? []).slice(0, 5).map((position, index) => (
+                    <div
+                      key={`${String(position.position_id ?? index)}`}
+                      className="rounded-lg border p-3 text-xs"
+                      style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-foreground">
+                          {String(position.symbol ?? '—')} · {String(position.side ?? '—')} · {humanizeCode(position.status ?? '—')}
+                        </span>
+                        <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                          broker demo · live bloccato
+                        </span>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                        <span>entry: {String(position.entry_price ?? '—')}</span>
+                        <span>quantità filled: {String(position.quantity ?? '—')}</span>
+                        <span>notional: {String(position.notional_usdt ?? '—')} USDT</span>
+                        <span>strategia: {String(position.strategy_id ?? '—')}</span>
+                        <span>order id: {String(position.source_demo_order_id ?? '—').slice(0, 14)}</span>
+                        <span>aperta: {formatIsoTime(position.opened_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {(data.runtimeDemoPositions?.positions ?? []).length === 0 ? (
+                    <div className="rounded-lg border p-3 text-xs text-muted" style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}>
+                      Nessuna posizione broker demo aperta: l’ultimo ordine demo è stato annullato perché stale/non filled. La posizione paper locale resta separata.
+                    </div>
+                  ) : null}
+                  {(data.runtimeDemoPositions?.ignoredOrders ?? []).slice(0, 3).map((order, index) => (
+                    <MiniEvent
+                      key={`${String(order.order_id ?? index)}`}
+                      label={`Ordine demo non diventato posizione · ${String(order.symbol ?? '—')}`}
+                      event={order}
+                    />
+                  ))}
                 </div>
               </div>
               <div className="rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
