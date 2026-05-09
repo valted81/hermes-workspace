@@ -370,7 +370,12 @@ type RuntimePaperPositionsPayload = {
   mode: string
   positionCount: number
   openCount: number
+  closedCount?: number
+  realizedPnlUsdt?: number
+  unrealizedPnlUsdt?: number
   openedEventCount: number
+  closedEventCount?: number
+  recentClosedPositions?: Array<Record<string, unknown>>
   positions: Array<Record<string, unknown>>
   events: Array<Record<string, unknown>>
   safety?: Record<string, unknown>
@@ -2613,8 +2618,13 @@ export function VtCapitalScreen() {
                 />
                 <Metric
                   label="Posizioni paper"
-                  value={data.runtimePaperPositions?.openCount ?? 0}
+                  value={`${data.runtimePaperPositions?.openCount ?? 0} aperte / ${data.runtimePaperPositions?.closedCount ?? 0} chiuse`}
                   tone={(data.runtimePaperPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'}
+                />
+                <Metric
+                  label="PnL paper chiuso"
+                  value={`${Number(data.runtimePaperPositions?.realizedPnlUsdt ?? 0).toFixed(4)} USDT`}
+                  tone={Number(data.runtimePaperPositions?.realizedPnlUsdt ?? 0) >= 0 ? 'good' : 'warn'}
                 />
                 <Metric
                   label="Decisioni"
@@ -2849,6 +2859,49 @@ export function VtCapitalScreen() {
                   ).length === 0 ? (
                     <div className="text-xs text-muted">
                       Nessuna posizione paper locale aperta.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Ultime chiusure paper locali
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimePaperPositions?.recentClosedPositions ?? [])
+                    .slice(0, 5)
+                    .map((position, index) => (
+                      <div
+                        key={`${String(position.position_id ?? index)}-closed`}
+                        className="rounded-lg border p-3 text-xs"
+                        style={{
+                          background: 'var(--theme-card2)',
+                          borderColor: 'var(--theme-border)',
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground">
+                            {String(position.symbol ?? '—')} · {humanizeCode(position.close_reason ?? 'chiusa')}
+                          </span>
+                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                            paper locale chiusa
+                          </span>
+                        </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                          <span>setup: {String(position.setup ?? '—')}</span>
+                          <span>tf: {String(position.timeframe ?? position.last_candle_timeframe ?? '—')}</span>
+                          <span>entry: {String(position.entry_price ?? '—')}</span>
+                          <span>close: {String(position.close_price ?? '—')}</span>
+                          <span>PnL: {String(position.realized_pnl_pct ?? '—')}%</span>
+                          <span>PnL USDT: {String(position.realized_pnl_usdt ?? '—')}</span>
+                          <span>chiusa: {formatIsoTime(position.closed_at)}</span>
+                          <span>Guardian: {String(position.guardian_approval_id ?? '—').slice(0, 8)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  {(data.runtimePaperPositions?.recentClosedPositions ?? []).length === 0 ? (
+                    <div className="text-xs text-muted">
+                      Nessuna chiusura paper locale ancora registrata.
                     </div>
                   ) : null}
                 </div>

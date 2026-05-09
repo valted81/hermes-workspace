@@ -1238,10 +1238,20 @@ export function readRuntimePaperPositions(): JsonRecord {
         ? raw.position_count
         : positions.length,
     openCount: typeof raw?.open_count === 'number' ? raw.open_count : 0,
+    closedCount: typeof raw?.closed_count === 'number' ? raw.closed_count : 0,
+    realizedPnlUsdt:
+      typeof raw?.realized_pnl_usdt === 'number' ? raw.realized_pnl_usdt : 0,
+    unrealizedPnlUsdt:
+      typeof raw?.unrealized_pnl_usdt === 'number' ? raw.unrealized_pnl_usdt : 0,
     openedEventCount:
       typeof raw?.opened_event_count === 'number'
         ? raw.opened_event_count
         : events.length,
+    closedEventCount:
+      typeof raw?.closed_event_count === 'number' ? raw.closed_event_count : 0,
+    recentClosedPositions: Array.isArray(raw?.recent_closed_positions)
+      ? raw.recent_closed_positions
+      : positions.filter((row) => row && typeof row === 'object' && (row as JsonRecord).status === 'CLOSED').slice(-5),
     positions,
     events,
     safety: {
