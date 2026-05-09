@@ -376,6 +376,24 @@ type RuntimePaperPositionsPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeDemoBridgePayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  brokerMode: string | null
+  orderCount: number
+  submittedEventCount: number
+  skippedCount: number
+  orders: Array<Record<string, unknown>>
+  events: Array<Record<string, unknown>>
+  skipped: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -440,6 +458,7 @@ type VtPayload = {
   runtimeManualApprovalActions?: RuntimeManualApprovalActionsPayload
   runtimeSignals?: RuntimeSignalsPayload
   runtimePaperPositions?: RuntimePaperPositionsPayload
+  runtimeDemoBridge?: RuntimeDemoBridgePayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -666,7 +685,7 @@ const VT_TABS: Array<{
     label: 'Trading',
     icon: '📈',
     short: 'Ordini',
-    description: 'Guardian e shadow.',
+    description: 'Segnali, Guardian, paper e demo.',
   },
   {
     id: 'strategie',
@@ -700,14 +719,14 @@ const VT_TABS: Array<{
     id: 'investimenti',
     label: 'Investimenti',
     icon: '🏦',
-    short: 'Lungo',
-    description: 'Bias e watchlist.',
+    short: 'Piani',
+    description: 'Accumulo e piani lungo periodo.',
   },
   {
     id: 'impostazioni',
     label: 'Impostazioni',
     icon: '⚙️',
-    short: 'Setup',
+    short: 'Config',
     description: 'Preferenze locali.',
   },
   {
@@ -715,7 +734,7 @@ const VT_TABS: Array<{
     label: 'Altro',
     icon: '🧩',
     short: 'Extra',
-    description: 'Runtime e dettagli.',
+    description: 'Dettagli tecnici.',
   },
 ]
 
@@ -770,17 +789,82 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+function humanizeCode(value: unknown): string {
+  const raw = String(value ?? '').trim()
+  if (!raw) return '—'
+  const normalized = raw.toLowerCase()
+  const labels: Record<string, string> = {
+    approved: 'Approvato dal controllo rischio',
+    runtime_signal_risk_blocks: 'Bloccato dal controllo rischio del segnale operativo',
+    forward_observations_below_minimum: 'Serve più storico forward prima di procedere',
+    waiting_more_forward_evidence: 'In attesa di altre osservazioni forward',
+    needs_more_forward_evidence: 'Serve più evidenza forward',
+    risk_gate_blocked: 'Bloccato dal gate di rischio',
+    guardian_not_approved: 'Guardian non ha approvato la proposta',
+    proposal_missing: 'Proposta ordine non trovata',
+    duplicate_open_order: 'Ordine duplicato già aperto',
+    already_submitted_for_proposal_or_scope: 'Già inviato un ordine demo per questa proposta/scope',
+    invalid_executor_payload: 'Payload ordine non valido',
+    max_demo_notional_exceeded: 'Importo demo sopra il limite consentito',
+    executor_did_not_confirm_order: 'Executor non ha confermato l’ordine demo',
+    paper_observe_only: 'Solo osservazione paper/demo, non live',
+    keep_forward_observe: 'Continua osservazione forward',
+    approve_paper_observe_candidate: 'Approva solo osservazione paper/demo',
+    approved_for_paper_observe_proposal: 'Approvato per creare proposta paper/demo',
+    watch: 'Da monitorare',
+    paper_observe: 'Osservazione paper/demo',
+    manual_review: 'Richiede revisione manuale',
+    discard: 'Scartato',
+    no_trade: 'Nessun trade',
+    active: 'Segnale attivo',
+    open: 'Aperto',
+    submitted: 'Inviato',
+    created: 'Creato',
+    closed: 'Chiuso',
+  }
+  if (labels[normalized]) return labels[normalized]
+  return raw
+    .replaceAll('_', ' ')
+    .replaceAll('-', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function safetyLabel(key: string, value: unknown): string {
+  const enabled = value === true
+  if (key === 'brokerCallsAllowed' || key === 'broker_submitted') {
+    return enabled
+      ? 'Broker abilitato per questo step'
+      : 'Broker disattivato in questo step: nessun ordine inviato'
+  }
+  if (key === 'approved_by_risk' || key === 'approvedByRisk') {
+    return enabled
+      ? 'Guardian ha approvato il rischio'
+      : 'Rischio non ancora approvato dal Guardian'
+  }
+  if (key === 'executionEnabled' || key === 'execution_enabled') {
+    return enabled
+      ? 'Esecuzione abilitata'
+      : 'Esecuzione disattivata'
+  }
+  if (key === 'paperPromoted' || key === 'paper_promoted') {
+    return enabled
+      ? 'Promosso a paper/demo'
+      : 'Non promosso automaticamente'
+  }
+  return `${humanizeCode(key)}: ${humanizeCode(value)}`
+}
+
 function formatConciliumRole(role: unknown): string {
   const item = asRecord(role)
   if (!item) return 'ruolo sconosciuto'
-  const roleLabel = String(item.role ?? 'agent').replaceAll('_', ' ')
-  return `${roleLabel}: ${String(item.stance ?? '—')} · ${String(item.reason_code ?? '—')}`
+  const roleLabel = humanizeCode(item.role ?? 'agent')
+  return `${roleLabel}: ${humanizeCode(item.stance ?? '—')} · ${humanizeCode(item.reason_code ?? '—')}`
 }
 
 function formatViolations(value: unknown): string {
   return Array.isArray(value)
-    ? value.map(String).join(', ')
-    : String(value ?? '—')
+    ? value.map(humanizeCode).join(', ')
+    : humanizeCode(value)
 }
 
 function formatMoney(value: number | null | undefined): string {
@@ -1378,11 +1462,11 @@ export function VtCapitalScreen() {
     return [
       {
         id: 'cockpit',
-        title: 'VT Capital Cockpit',
+        title: 'Cruscotto VT Capital',
         group: 'core',
         status: data ? 'online' : 'missing',
         summary: 'Dashboard operativa read-only dentro Hermes Workspace.',
-        does: 'Unifica trading demo, portafoglio, Concilium, market bias, shadow audit e note vault.',
+        does: 'Unifica segnali, Concilium operativo, Guardian, paper locale, demo controllato e note vault.',
         input: '/api/vt-capital, JSONL locali, runtime profili Hermes.',
         output: 'Vista umana cliccabile, senza side effect di trading.',
         next: 'Aggiungere chat agenti più nativa e store analisi normalizzato.',
@@ -1393,7 +1477,7 @@ export function VtCapitalScreen() {
         group: 'core',
         status: data?.ok ? 'online' : 'missing',
         summary: 'Read-model stabile per la dashboard.',
-        does: 'Legge code, stato demo guardian, audit shadow, storico council e profili worker.',
+        does: 'Legge code operative, stato Guardian, audit sicurezza, storico Concilium e profili agenti.',
         input: 'File VT Capital + Hermes Vault + profili Hermes Workspace.',
         output: 'Payload JSON compatto per il cockpit.',
         next: 'Separare endpoint /map, /agents e /analyses quando il sistema cresce.',
@@ -1405,7 +1489,7 @@ export function VtCapitalScreen() {
         status: strategyCounts.total > 0 ? 'observe' : 'missing',
         summary: `${strategyCounts.paper} paper · ${strategyCounts.backtest} backtest · ${strategyCounts.ideas} idee.`,
         does: 'Crea strategie, controlla backtest e abilita solo paper/observe.',
-        input: 'Market bias, storico council, regole risk, backtest futuri.',
+        input: 'Bias mercato, storico Concilium, regole rischio e segnali runtime.',
         output: 'Catalogo strategie con stato sicuro e prossime azioni.',
         next: 'Collegare runner backtest reale e registry persistente backend.',
       },
@@ -1514,7 +1598,7 @@ export function VtCapitalScreen() {
         summary: `${data?.runtimeSignals?.activeCount ?? 0} attivi · ${data?.runtimeSignals?.actionableCount ?? 0} actionable · ${data?.runtimeSignals?.signalCount ?? 0} scan.`,
         does: 'Scansiona candele locali BTC/ETH/SOL e genera segnali runtime separati dal Lab.',
         input: 'data/desks/desk-a-swing, timeframe 15m/1h/4h, indicatori EMA/RSI/ATR/volume.',
-        output: 'data/runtime/signals.json/jsonl, observe-only e broker off.',
+        output: 'data/runtime/signals.json/jsonl. Nessun ordine parte da qui: decide il Concilium operativo.',
         next: 'Aggiungere macro/news reali e posizioni aperte come fattori nel Concilium operativo.',
       },
       {
@@ -1577,22 +1661,22 @@ export function VtCapitalScreen() {
         title: 'Posizioni paper locali',
         group: 'queue',
         status: (data?.runtimePaperPositions?.openCount ?? 0) > 0 ? 'demo' : 'blocked',
-        summary: `${data?.runtimePaperPositions?.openCount ?? 0} aperte · ${data?.runtimePaperPositions?.positionCount ?? 0} totali · broker off.`,
+        summary: `${data?.runtimePaperPositions?.openCount ?? 0} aperte · ${data?.runtimePaperPositions?.positionCount ?? 0} totali · locale, senza broker live.`,
         does: 'Apre solo posizioni simulate locali dopo Concilium + Guardian approvati; non invia ordini.',
         input: 'Guardian review APPROVED + order proposal canonica.',
         output: 'data/runtime/paper-positions.json/jsonl con PnL mark-to-market locale.',
         next: 'Aggiungere chiusura automatica simulata su stop/take-profit/invalidation.',
       },
       {
-        id: 'missing-paper-bridge',
+        id: 'runtime-demo-broker-bridge',
         title: 'Ponte demo broker controllato',
-        group: 'missing',
-        status: 'blocked',
-        summary: 'Non ancora attivo: il paper locale gira, ma il broker demo resta spento.',
-        does: 'Sarà il passaggio da posizione paper locale a ordine demo broker, non a live trading.',
-        input: 'Order proposal approvata da Guardian + consenso esplicito Valerio + feature flag demo.',
-        output: 'Ordine demo osservabile con PnL, invalidation e audit.',
-        next: 'Prima chiudere paper locale con stop/take-profit; poi decidere se abilitare broker demo.',
+        group: 'queue',
+        status: (data?.runtimeDemoBridge?.orderCount ?? 0) > 0 ? 'demo' : 'observe',
+        summary: `${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i demo inviati · live sempre bloccato.`,
+        does: 'Invia solo micro ordini al conto demo dopo segnale runtime, Concilium operativo e Guardian APPROVED.',
+        input: 'Order proposal approvata da Guardian + feature flag demo + idempotenza anti-duplicato.',
+        output: 'data/runtime/demo-broker-bridge.json/jsonl con order id demo, stato e scope.',
+        next: 'Monitorare esecuzione/riempimento demo e mostrare stop/TP/PnL broker in dashboard.',
       },
     ]
   }, [data, performance, strategyCounts])
@@ -1615,7 +1699,8 @@ export function VtCapitalScreen() {
           `Forward observe: ${data?.forwardTestQueue?.activeCount ?? 0} candidato/i in coda`,
           `Runtime signals: ${data?.runtimeSignals?.activeCount ?? 0} attivi · ${data?.runtimeSignals?.actionableCount ?? 0} actionable`,
           `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
-          `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte, broker off`,
+          `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte`,
+          `Broker demo: ${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i inviati, live bloccato`,
         ],
       },
       {
@@ -1635,7 +1720,7 @@ export function VtCapitalScreen() {
         title: 'Manca per trading reale',
         tone: 'danger' as const,
         items: [
-          'broker demo controllato con feature flag esplicito',
+          'monitorare ordini demo, stop e take profit direttamente dalla dashboard',
           'DCA/investimenti separati dal trading intraday',
         ],
       },
@@ -1683,14 +1768,14 @@ export function VtCapitalScreen() {
         value: String(packet?.status ?? 'nessun packet'),
         detail:
           violations.length > 0
-            ? `blocco: ${violations.join(', ')}`
-            : `reason: ${String(packet?.reason_code ?? '—')}`,
+            ? `Blocco: ${violations.map(humanizeCode).join(', ')}`
+            : `Motivo: ${humanizeCode(packet?.reason_code ?? '—')}`,
       },
       {
         label: 'Runtime Concilium',
         status: latestDecision?.decision === 'MANUAL_REVIEW' ? 'ok' : 'attesa',
         value: String(latestDecision?.decision ?? 'nessuna decisione'),
-        detail: `reason: ${String(latestDecision?.reason_code ?? '—')} · confidence ${String(latestDecision?.confidence ?? '—')}`,
+        detail: `Motivo: ${humanizeCode(latestDecision?.reason_code ?? '—')} · fiducia ${String(latestDecision?.confidence ?? '—')}`,
       },
       {
         label: 'Approval Valerio',
@@ -1698,7 +1783,7 @@ export function VtCapitalScreen() {
         value: `${data?.runtimeManualApproval?.requestCount ?? 0} richieste`,
         detail:
           approvalBlock != null
-            ? `non pronto: ${String(approvalBlock.reason_code ?? '—')}`
+            ? `Non pronto: ${humanizeCode(approvalBlock.reason_code ?? '—')}`
             : 'quando appare qui, serve approvazione esplicita PAPER_OBSERVE',
       },
       {
@@ -1716,7 +1801,7 @@ export function VtCapitalScreen() {
         value: `${data?.runtimeOrderProposals?.proposalCount ?? 0} proposte`,
         detail:
           proposalHold != null
-            ? `trattenuta: ${String(proposalHold.reason_code ?? '—')}`
+            ? `Trattenuta: ${humanizeCode(proposalHold.reason_code ?? '—')}`
             : 'nessuna proposta inviata al Guardian',
       },
       {
@@ -1725,7 +1810,7 @@ export function VtCapitalScreen() {
         value: `${data?.runtimeGuardianReview?.reviewCount ?? 0} controlli`,
         detail:
           guardianHold != null
-            ? `in attesa: ${String(guardianHold.reason_code ?? '—')}`
+            ? `In attesa: ${humanizeCode(guardianHold.reason_code ?? '—')}`
             : 'Guardian pronto, ma non ha proposal da validare',
       },
     ]
@@ -1806,11 +1891,11 @@ export function VtCapitalScreen() {
                   Plugin VT Capital
                 </div>
                 <h1 className="text-2xl font-bold tracking-tight">
-                  VT Capital Cockpit
+                  Cruscotto VT Capital
                 </h1>
                 <p className="mt-1 max-w-2xl text-sm text-muted">
-                  Bias crypto BTC/ETH/SOL, council/precheck, worker Swarm e note
-                  vault in una superficie isolata dal resto della dashboard.
+                  Segnali crypto BTC/ETH/SOL, Concilium operativo, Guardian,
+                  posizioni paper e ordini demo controllati in un pannello separato dal resto di Hermes.
                 </p>
               </div>
             </div>
@@ -1867,12 +1952,12 @@ export function VtCapitalScreen() {
 
         <div className="grid gap-4 md:grid-cols-4">
           <Metric
-            label="Market bias file"
+            label="File bias mercato"
             value={data.marketBias.fileExists ? 'online' : 'missing'}
             tone={data.marketBias.fileExists ? 'good' : 'warn'}
           />
           <Metric
-            label="Council precheck"
+            label="Precheck Concilium"
             value={
               data.council.fileExists
                 ? `${data.council.recent.length} record`
@@ -2279,7 +2364,7 @@ export function VtCapitalScreen() {
                     safe={data.guardian.liveBlocked}
                   />
                   <SafetyPill
-                    label="Broker non fornito"
+                    label="Broker live non collegato"
                     safe={!data.shadow?.brokerSupplied}
                   />
                   <SafetyPill
@@ -2348,7 +2433,7 @@ export function VtCapitalScreen() {
                             color: 'var(--theme-danger)',
                           }}
                         >
-                          {String(
+                          {humanizeCode(
                             block.reason_code ?? block.reason ?? 'BLOCKED',
                           )}
                           {block.symbol ? ` · ${String(block.symbol)}` : ''}
@@ -2411,7 +2496,7 @@ export function VtCapitalScreen() {
 
             <Card title="Concilium operativo" accent="var(--theme-primary)">
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Runtime gate read-only
+                Segnali → Concilium → Guardian → paper/demo
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Metric
@@ -2420,7 +2505,7 @@ export function VtCapitalScreen() {
                   tone={(data.runtimeSignals?.activeCount ?? 0) > 0 ? 'warn' : 'neutral'}
                 />
                 <Metric
-                  label="Paper posizioni"
+                  label="Posizioni paper"
                   value={data.runtimePaperPositions?.openCount ?? 0}
                   tone={(data.runtimePaperPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'}
                 />
@@ -2447,17 +2532,13 @@ export function VtCapitalScreen() {
                   value={data.runtimeOrderProposals?.heldCount ?? 0}
                 />
                 <Metric
-                  label="Broker"
+                  label="Broker demo"
                   value={
-                    data.runtimeOrderProposals?.safety?.brokerCallsAllowed
-                      ? 'abilitato'
-                      : 'off'
+                    (data.runtimeDemoBridge?.orderCount ?? 0) > 0
+                      ? `${data.runtimeDemoBridge?.brokerMode ?? 'demo'} · ${data.runtimeDemoBridge?.orderCount} ordine/i`
+                      : 'nessun ordine demo'
                   }
-                  tone={
-                    data.runtimeOrderProposals?.safety?.brokerCallsAllowed
-                      ? 'warn'
-                      : 'good'
-                  }
+                  tone={(data.runtimeDemoBridge?.orderCount ?? 0) > 0 ? 'warn' : 'neutral'}
                 />
               </div>
               <div
@@ -2467,9 +2548,10 @@ export function VtCapitalScreen() {
                   borderColor: 'var(--theme-border)',
                 }}
               >
-                Ponte operativo: segnali runtime → Concilium operativo → order
-                proposal → Guardian → posizione paper locale. Broker sempre off:
-                nessun ordine reale viene inviato.
+                Ponte operativo: segnali runtime BTC/ETH/SOL su 15m, 1h e 4h → Concilium operativo → proposta ordine
+                → Guardian → paper locale. Se il Guardian approva, il ponte
+                demo può inviare anche un micro ordine su Bybit demo. Live resta
+                bloccato.
               </div>
               <div className="mt-3 space-y-2">
                 {(data.runtimeConcilium?.decisions ?? [])
@@ -2477,14 +2559,13 @@ export function VtCapitalScreen() {
                   .map((decision, index) => (
                     <div key={`${String(decision.decision_id ?? index)}`}>
                       <MiniEvent
-                        label={`${String(decision.strategy_id ?? 'strategy')} · ${String(
+                        label={`${String(decision.strategy_id ?? 'strategy')} · ${humanizeCode(
                           decision.decision ?? '—',
                         )}`}
                         event={decision}
                       />
-                      <div className="mt-1 text-[11px] text-muted">
-                        reason: {String(decision.reason_code ?? '—')} · broker
-                        off · approved_by_risk=false
+                        <div className="mt-1 text-[11px] text-muted">
+                        Motivo: {humanizeCode(decision.reason_code ?? '—')} · passa dal Guardian prima di qualunque demo
                       </div>
                     </div>
                   ))}
@@ -2516,7 +2597,7 @@ export function VtCapitalScreen() {
                             {String(position.symbol ?? '—')} · {String(position.strategy_id ?? '—')}
                           </span>
                           <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
-                            paper locale · broker off
+                            paper locale · broker demo separato
                           </span>
                         </div>
                         <div className="mt-2 grid gap-2 sm:grid-cols-4">
@@ -2538,6 +2619,49 @@ export function VtCapitalScreen() {
                   ).length === 0 ? (
                     <div className="text-xs text-muted">
                       Nessuna posizione paper locale aperta.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Ordini su broker demo
+                </div>
+                <div className="mb-2 text-xs text-muted">
+                  Questi sono ordini inviati al conto Bybit demo dopo Concilium operativo + Guardian. Non sono live.
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimeDemoBridge?.orders ?? []).slice(-5).reverse().map((order, index) => (
+                    <div
+                      key={`${String(order.order_id ?? index)}`}
+                      className="rounded-lg border p-3 text-xs"
+                      style={{
+                        background: 'var(--theme-card2)',
+                        borderColor: 'var(--theme-border)',
+                      }}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-foreground">
+                          {String(order.symbol ?? '—')} · {String(order.side ?? '—')} · {String(order.status ?? '—')}
+                        </span>
+                        <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                          {String(order.mode ?? data.runtimeDemoBridge?.brokerMode ?? 'demo')} · live bloccato
+                        </span>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                        <span>prezzo: {String(order.price ?? '—')}</span>
+                        <span>quantità: {String(order.amount ?? '—')}</span>
+                        <span>strategia: {String(order.strategy_id ?? '—')}</span>
+                        <span>ambito: {humanizeCode(order.book ?? '—')} / {humanizeCode(order.position_horizon ?? '—')}</span>
+                        <span>order id: {String(order.order_id ?? '—').slice(0, 14)}</span>
+                        <span>Guardian: {String(order.approval_id ?? '—').slice(0, 8)}</span>
+                        <span>creato: {formatIsoTime(order.created_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {(data.runtimeDemoBridge?.orders ?? []).length === 0 ? (
+                    <div className="text-xs text-muted">
+                      Nessun ordine broker demo ancora inviato.
                     </div>
                   ) : null}
                 </div>
@@ -3060,17 +3184,18 @@ export function VtCapitalScreen() {
                               </span>
                               <span>
                                 Concilium:{' '}
-                                {String(review?.recommendation ?? '—')} ·{' '}
-                                {String(review?.reason_code ?? '—')}
+                                {humanizeCode(review?.recommendation ?? '—')} ·{' '}
+                                {humanizeCode(review?.reason_code ?? '—')}
                               </span>
                               <span>
-                                risk gate: {String(riskGate?.status ?? '—')}
+                                controllo rischio: {humanizeCode(riskGate?.status ?? '—')}
                               </span>
                             </div>
                             <div className="mt-2 text-[11px] text-muted">
-                              reason: {String(candidate.queue_reason ?? '—')} ·
-                              params: {compactJson(candidate.params ?? {})} ·
-                              broker off · paper_promoted=false
+                              Motivo: {humanizeCode(candidate.queue_reason ?? '—')} ·
+                              parametri: {compactJson(candidate.params ?? {})} ·
+                              {safetyLabel('brokerCallsAllowed', false)} ·
+                              {safetyLabel('paper_promoted', false)}
                             </div>
                           </div>
                         )
@@ -3115,8 +3240,8 @@ export function VtCapitalScreen() {
                     label="Safety perf"
                     value={
                       data.forwardPerformance?.safety.brokerCallsAllowed
-                        ? 'broker on'
-                        : 'broker off'
+                        ? 'Broker abilitato'
+                        : 'Broker disattivato'
                     }
                     tone={
                       data.forwardPerformance?.safety.brokerCallsAllowed
@@ -3225,8 +3350,8 @@ export function VtCapitalScreen() {
                                 <span>paper: false · manual review</span>
                               </div>
                               <div className="mt-1 text-[11px] text-muted">
-                                reason: {String(manualGate?.reason_code ?? '—')}{' '}
-                                · broker off · execution=false
+                                Motivo: {humanizeCode(manualGate?.reason_code ?? '—')}{' '}
+                                · {safetyLabel('brokerCallsAllowed', false)} · {safetyLabel('execution_enabled', false)}
                               </div>
                             </div>
                           )
@@ -3260,8 +3385,8 @@ export function VtCapitalScreen() {
                     <span>
                       safety:{' '}
                       {data.manualPaperReview?.safety.brokerCallsAllowed
-                        ? 'broker on'
-                        : 'broker off'}
+                        ? 'Broker abilitato'
+                        : 'Broker disattivato'}
                     </span>
                   </div>
                   <div className="mt-2 space-y-1">
@@ -3323,11 +3448,11 @@ export function VtCapitalScreen() {
                                     ? formatPct(worstDrawdown)
                                     : '—'}
                                 </span>
-                                <span>paper_promoted=false</span>
+                                <span>{safetyLabel('paper_promoted', false)}</span>
                               </div>
                               <div className="mt-1 text-[11px] text-muted">
-                                reason: {String(packet.reason_code ?? '—')} ·
-                                review manuale Valerio · execution=false
+                                Motivo: {humanizeCode(packet.reason_code ?? '—')} ·
+                                review manuale Valerio · {safetyLabel('execution_enabled', false)}
                               </div>
                             </div>
                           )
@@ -3359,8 +3484,8 @@ export function VtCapitalScreen() {
                     <span>
                       safety:{' '}
                       {data.runtimeManualApproval?.safety?.brokerCallsAllowed
-                        ? 'broker on'
-                        : 'broker off'}
+                        ? 'Broker abilitato'
+                        : 'Broker disattivato'}
                     </span>
                   </div>
                   <div className="mt-2 space-y-1">
@@ -3381,7 +3506,7 @@ export function VtCapitalScreen() {
                               </span>
                             </div>
                             <div className="mt-1 text-[11px] text-muted">
-                              scope: {String(request.approval_scope ?? 'paper_observe_only')} · azione: {String(request.requested_action ?? 'APPROVE_PAPER_OBSERVE_CANDIDATE')} · execution=false
+                              ambito: {humanizeCode(request.approval_scope ?? 'paper_observe_only')} · azione: {humanizeCode(request.requested_action ?? 'APPROVE_PAPER_OBSERVE_CANDIDATE')} · {safetyLabel('execution_enabled', false)}
                             </div>
                           </div>
                         ))
@@ -3483,7 +3608,7 @@ export function VtCapitalScreen() {
                             <div className="mt-2 text-[11px] text-muted">
                               interface: {String(observation.interface ?? '—')}{' '}
                               · source: {String(observation.source ?? '—')} ·
-                              broker off · paper_promoted=false
+                              Broker disattivato · non promosso automaticamente
                             </div>
                           </div>
                         )
@@ -3587,8 +3712,8 @@ export function VtCapitalScreen() {
                                 {String(conciliumReview.confidence ?? '—')}
                               </span>
                               <span className="text-muted">
-                                reason:{' '}
-                                {String(conciliumReview.reason_code ?? '—')}
+                                Motivo:{' '}
+                                {humanizeCode(conciliumReview.reason_code ?? '—')}
                               </span>
                             </div>
                             {conciliumRoles.length ? (
