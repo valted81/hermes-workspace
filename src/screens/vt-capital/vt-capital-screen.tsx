@@ -453,6 +453,21 @@ type RuntimePortfolioStatusPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeOperationalJournalPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  eventCount: number
+  countsByType?: Record<string, unknown>
+  countsBySeverity?: Record<string, unknown>
+  events: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -521,6 +536,7 @@ type VtPayload = {
   runtimeDemoOrderMonitor?: RuntimeDemoOrderMonitorPayload
   runtimeDemoPositions?: RuntimeDemoPositionsPayload
   runtimePortfolioStatus?: RuntimePortfolioStatusPayload
+  runtimeOperationalJournal?: RuntimeOperationalJournalPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -2676,6 +2692,46 @@ export function VtCapitalScreen() {
                   ))}
                   {(data.runtimePortfolioStatus?.alerts ?? []).length === 0 ? (
                     <div className="text-xs text-muted">Nessun alert operativo consolidato.</div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-3 rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-foreground">
+                    Diario operativo
+                  </div>
+                  <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                    {data.runtimeOperationalJournal?.eventCount ?? 0} eventi · read-only
+                  </span>
+                </div>
+                <div className="mb-3 text-xs text-muted">
+                  Timeline leggibile: segnale → Concilium → Guardian → paper locale → broker demo. Non invia ordini.
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimeOperationalJournal?.events ?? []).slice(0, 8).map((event, index) => (
+                    <div
+                      key={`${String(event.timestamp ?? index)}-${String(event.event_type ?? index)}-${index}`}
+                      className="rounded-lg border px-3 py-2 text-xs"
+                      style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-foreground">
+                          {String(event.title ?? humanizeCode(event.event_type ?? 'evento'))}
+                        </span>
+                        <span className="text-[11px] text-muted">{formatIsoTime(event.timestamp)}</span>
+                      </div>
+                      <div className="mt-1 text-muted">{String(event.message ?? '—')}</div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted">
+                        <span>{String(event.source ?? 'runtime')}</span>
+                        {event.symbol ? <span>{String(event.symbol)}</span> : null}
+                        {event.timeframe ? <span>tf {String(event.timeframe)}</span> : null}
+                        {event.status ? <span>{humanizeCode(event.status)}</span> : null}
+                        {event.reason_code ? <span>reason_code: {String(event.reason_code)}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                  {(data.runtimeOperationalJournal?.events ?? []).length === 0 ? (
+                    <div className="text-xs text-muted">Diario operativo non ancora generato.</div>
                   ) : null}
                 </div>
               </div>
