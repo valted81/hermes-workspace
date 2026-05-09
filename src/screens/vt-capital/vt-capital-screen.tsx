@@ -448,6 +448,11 @@ type RuntimePortfolioStatusPayload = {
   paper?: Record<string, unknown>
   demoBroker?: Record<string, unknown>
   totals?: Record<string, unknown>
+  reconciliation?: {
+    paper_demo_rows?: Array<Record<string, unknown>>
+    needs_attention_count?: number
+    ok_count?: number
+  }
   alerts: Array<Record<string, unknown>>
   alertCount: number
   safety?: Record<string, unknown>
@@ -2693,6 +2698,37 @@ export function VtCapitalScreen() {
                   {(data.runtimePortfolioStatus?.alerts ?? []).length === 0 ? (
                     <div className="text-xs text-muted">Nessun alert operativo consolidato.</div>
                   ) : null}
+                </div>
+                <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--theme-border)' }}>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      Riconciliazione paper / broker demo
+                    </div>
+                    <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
+                      {Number(data.runtimePortfolioStatus?.reconciliation?.needs_attention_count ?? 0)} da guardare
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {(data.runtimePortfolioStatus?.reconciliation?.paper_demo_rows ?? []).slice(0, 4).map((row, index) => (
+                      <div
+                        key={`${String(row.paper_position_id ?? index)}`}
+                        className="rounded-lg border px-3 py-2 text-xs"
+                        style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground">
+                            {String(row.symbol ?? '—')} · {humanizeCode(row.status ?? 'stato sconosciuto')}
+                          </span>
+                          <span className="text-[11px] text-muted">{String(row.timeframe ?? 'tf —')} · {String(row.setup ?? 'setup —')}</span>
+                        </div>
+                        <div className="mt-1 text-muted">{String(row.message ?? '—')}</div>
+                        <div className="mt-1 text-[11px] text-muted">Prossima azione: {String(row.next_action ?? '—')}</div>
+                      </div>
+                    ))}
+                    {(data.runtimePortfolioStatus?.reconciliation?.paper_demo_rows ?? []).length === 0 ? (
+                      <div className="text-xs text-muted">Nessuna posizione paper da riconciliare con il broker demo.</div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="mt-3 rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>

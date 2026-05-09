@@ -1416,6 +1416,12 @@ export function readRuntimePortfolioStatus(): JsonRecord {
       ? (raw.totals as JsonRecord)
       : {}
   const alerts = Array.isArray(raw?.alerts) ? raw.alerts : []
+  const reconciliation =
+    raw?.reconciliation &&
+    typeof raw.reconciliation === 'object' &&
+    !Array.isArray(raw.reconciliation)
+      ? (raw.reconciliation as JsonRecord)
+      : {}
   const safety =
     raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
       ? (raw.safety as JsonRecord)
@@ -1435,6 +1441,7 @@ export function readRuntimePortfolioStatus(): JsonRecord {
     paper,
     demoBroker,
     totals,
+    reconciliation,
     alerts,
     alertCount: alerts.length,
     safety: {
