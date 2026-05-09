@@ -437,6 +437,22 @@ type RuntimeDemoPositionsPayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimePortfolioStatusPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  paper?: Record<string, unknown>
+  demoBroker?: Record<string, unknown>
+  totals?: Record<string, unknown>
+  alerts: Array<Record<string, unknown>>
+  alertCount: number
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -504,6 +520,7 @@ type VtPayload = {
   runtimeDemoBridge?: RuntimeDemoBridgePayload
   runtimeDemoOrderMonitor?: RuntimeDemoOrderMonitorPayload
   runtimeDemoPositions?: RuntimeDemoPositionsPayload
+  runtimePortfolioStatus?: RuntimePortfolioStatusPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -2614,6 +2631,53 @@ export function VtCapitalScreen() {
                 → Guardian → paper locale. Se il Guardian approva, il ponte
                 demo può inviare anche un micro ordine su Bybit demo. Live resta
                 bloccato.
+              </div>
+              <div className="mt-3 rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-sm font-semibold text-foreground">
+                  Stato operativo consolidato
+                </div>
+                <div className="mb-3 text-xs text-muted">
+                  Riassume cosa è solo paper locale, cosa è ordine broker demo e cosa è posizione broker demo reale. È read-only: non invia ordini.
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <Metric
+                    label="Paper aperte"
+                    value={Number(data.runtimePortfolioStatus?.totals?.open_paper_positions ?? data.runtimePaperPositions?.openCount ?? 0)}
+                    tone={Number(data.runtimePortfolioStatus?.totals?.open_paper_positions ?? 0) > 0 ? 'warn' : 'good'}
+                  />
+                  <Metric
+                    label="PnL paper"
+                    value={`${Number(data.runtimePortfolioStatus?.totals?.paper_unrealized_pnl_usdt ?? 0).toFixed(4)} USDT`}
+                    tone={Number(data.runtimePortfolioStatus?.totals?.paper_unrealized_pnl_usdt ?? 0) >= 0 ? 'good' : 'warn'}
+                  />
+                  <Metric
+                    label="Ordini demo aperti"
+                    value={Number(data.runtimePortfolioStatus?.totals?.open_demo_orders ?? data.runtimeDemoOrderMonitor?.openCount ?? 0)}
+                    tone={Number(data.runtimePortfolioStatus?.totals?.open_demo_orders ?? 0) > 0 ? 'warn' : 'good'}
+                  />
+                  <Metric
+                    label="Posizioni demo"
+                    value={Number(data.runtimePortfolioStatus?.totals?.open_demo_positions ?? data.runtimeDemoPositions?.openCount ?? 0)}
+                    tone={Number(data.runtimePortfolioStatus?.totals?.open_demo_positions ?? 0) > 0 ? 'warn' : 'good'}
+                  />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(data.runtimePortfolioStatus?.alerts ?? []).slice(0, 4).map((alert, index) => (
+                    <div
+                      key={`${String(alert.code ?? index)}`}
+                      className="rounded-lg border px-3 py-2 text-xs"
+                      style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}
+                    >
+                      <span className="font-semibold text-foreground">
+                        {String(alert.level ?? 'info').toUpperCase()} · {humanizeCode(alert.code ?? 'alert')}
+                      </span>
+                      <span className="ml-2 text-muted">{String(alert.message ?? '—')}</span>
+                    </div>
+                  ))}
+                  {(data.runtimePortfolioStatus?.alerts ?? []).length === 0 ? (
+                    <div className="text-xs text-muted">Nessun alert operativo consolidato.</div>
+                  ) : null}
+                </div>
               </div>
               <div className="mt-3 space-y-2">
                 {(data.runtimeConcilium?.decisions ?? [])
