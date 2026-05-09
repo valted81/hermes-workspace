@@ -394,6 +394,29 @@ type RuntimeDemoBridgePayload = {
   safety?: Record<string, unknown>
 }
 
+type RuntimeDemoOrderMonitorPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  brokerMode: string | null
+  orderCount: number
+  checkedCount: number
+  openCount: number
+  finalCount: number
+  canceledCount: number
+  errorCount: number
+  staleSeconds: number | null
+  autoCancelEnabled: boolean
+  orders: Array<Record<string, unknown>>
+  events: Array<Record<string, unknown>>
+  errors: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
 type BacktestDataPayload = {
   source: string
   fetcher: string
@@ -459,6 +482,7 @@ type VtPayload = {
   runtimeSignals?: RuntimeSignalsPayload
   runtimePaperPositions?: RuntimePaperPositionsPayload
   runtimeDemoBridge?: RuntimeDemoBridgePayload
+  runtimeDemoOrderMonitor?: RuntimeDemoOrderMonitorPayload
   strategyTestLogs?: StrategyTestLogPayload
   backtestData?: BacktestDataPayload
   guardian?: GuardianPayload
@@ -1672,10 +1696,10 @@ export function VtCapitalScreen() {
         title: 'Ponte demo broker controllato',
         group: 'queue',
         status: (data?.runtimeDemoBridge?.orderCount ?? 0) > 0 ? 'demo' : 'observe',
-        summary: `${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i demo inviati · live sempre bloccato.`,
-        does: 'Invia solo micro ordini al conto demo dopo segnale runtime, Concilium operativo e Guardian APPROVED.',
-        input: 'Order proposal approvata da Guardian + feature flag demo + idempotenza anti-duplicato.',
-        output: 'data/runtime/demo-broker-bridge.json/jsonl con order id demo, stato e scope.',
+        summary: `${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i demo inviati · ${data?.runtimeDemoOrderMonitor?.openCount ?? 0} aperti · ${data?.runtimeDemoOrderMonitor?.canceledCount ?? 0} annullati stale · live bloccato.`,
+        does: 'Invia solo micro ordini al conto demo dopo segnale runtime, Concilium operativo e Guardian APPROVED; il monitor aggiorna stato e cancella ordini demo scaduti.',
+        input: 'Order proposal approvata da Guardian + feature flag demo + idempotenza anti-duplicato + monitor TTL.',
+        output: 'data/runtime/demo-broker-bridge.json + demo-order-monitor.json con order id demo, stato, scope e cancellazioni stale.',
         next: 'Monitorare esecuzione/riempimento demo e mostrare stop/TP/PnL broker in dashboard.',
       },
     ]
@@ -1700,7 +1724,7 @@ export function VtCapitalScreen() {
           `Runtime signals: ${data?.runtimeSignals?.activeCount ?? 0} attivi · ${data?.runtimeSignals?.actionableCount ?? 0} actionable`,
           `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
           `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte`,
-          `Broker demo: ${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i inviati, live bloccato`,
+          `Broker demo: ${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i inviati · ${data?.runtimeDemoOrderMonitor?.openCount ?? 0} aperti · ${data?.runtimeDemoOrderMonitor?.canceledCount ?? 0} annullati`,
         ],
       },
       {
@@ -2535,10 +2559,10 @@ export function VtCapitalScreen() {
                   label="Broker demo"
                   value={
                     (data.runtimeDemoBridge?.orderCount ?? 0) > 0
-                      ? `${data.runtimeDemoBridge?.brokerMode ?? 'demo'} · ${data.runtimeDemoBridge?.orderCount} ordine/i`
+                      ? `${data.runtimeDemoBridge?.brokerMode ?? 'demo'} · ${data.runtimeDemoOrderMonitor?.openCount ?? 0} aperti / ${data.runtimeDemoOrderMonitor?.canceledCount ?? 0} annullati`
                       : 'nessun ordine demo'
                   }
-                  tone={(data.runtimeDemoBridge?.orderCount ?? 0) > 0 ? 'warn' : 'neutral'}
+                  tone={(data.runtimeDemoOrderMonitor?.openCount ?? 0) > 0 ? 'warn' : 'good'}
                 />
               </div>
               <div
@@ -2623,12 +2647,18 @@ export function VtCapitalScreen() {
                   ) : null}
                 </div>
               </div>
-              <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--theme-border)' }}>
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <div className="rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-sm font-semibold text-foreground">
                   Ordini su broker demo
                 </div>
-                <div className="mb-2 text-xs text-muted">
-                  Questi sono ordini inviati al conto Bybit demo dopo Concilium operativo + Guardian. Non sono live.
+                <div className="mb-3 text-xs text-muted">
+                  Sono ordini inviati al conto Bybit demo dopo Concilium operativo + Guardian. Il monitor controlla stato/fill e annulla gli ordini demo vecchi oltre {data.runtimeDemoOrderMonitor?.staleSeconds ?? 900}s. Live bloccato.
+                </div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-4">
+                  <Metric label="Monitor" value={data.runtimeDemoOrderMonitor?.fileExists ? 'attivo' : 'manca'} tone={data.runtimeDemoOrderMonitor?.fileExists ? 'good' : 'warn'} />
+                  <Metric label="Aperti demo" value={data.runtimeDemoOrderMonitor?.openCount ?? 0} tone={(data.runtimeDemoOrderMonitor?.openCount ?? 0) > 0 ? 'warn' : 'good'} />
+                  <Metric label="Annullati stale" value={data.runtimeDemoOrderMonitor?.canceledCount ?? 0} tone={(data.runtimeDemoOrderMonitor?.canceledCount ?? 0) > 0 ? 'good' : 'neutral'} />
+                  <Metric label="Errori monitor" value={data.runtimeDemoOrderMonitor?.errorCount ?? 0} tone={(data.runtimeDemoOrderMonitor?.errorCount ?? 0) > 0 ? 'bad' : 'good'} />
                 </div>
                 <div className="space-y-2">
                   {(data.runtimeDemoBridge?.orders ?? []).slice(-5).reverse().map((order, index) => (
@@ -2642,7 +2672,7 @@ export function VtCapitalScreen() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-foreground">
-                          {String(order.symbol ?? '—')} · {String(order.side ?? '—')} · {String(order.status ?? '—')}
+                          {String(order.symbol ?? '—')} · {String(order.side ?? '—')} · {humanizeCode(order.status ?? '—')}
                         </span>
                         <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted" style={{ borderColor: 'var(--theme-border)' }}>
                           {String(order.mode ?? data.runtimeDemoBridge?.brokerMode ?? 'demo')} · live bloccato
@@ -2651,11 +2681,15 @@ export function VtCapitalScreen() {
                       <div className="mt-2 grid gap-2 sm:grid-cols-4">
                         <span>prezzo: {String(order.price ?? '—')}</span>
                         <span>quantità: {String(order.amount ?? '—')}</span>
+                        <span>fill: {String(order.filled ?? 0)} / restante {String(order.remaining ?? '—')}</span>
                         <span>strategia: {String(order.strategy_id ?? '—')}</span>
                         <span>ambito: {humanizeCode(order.book ?? '—')} / {humanizeCode(order.position_horizon ?? '—')}</span>
                         <span>order id: {String(order.order_id ?? '—').slice(0, 14)}</span>
                         <span>Guardian: {String(order.approval_id ?? '—').slice(0, 8)}</span>
                         <span>creato: {formatIsoTime(order.created_at)}</span>
+                        <span>ultimo controllo: {formatIsoTime(order.last_checked_at)}</span>
+                        <span>età: {order.age_seconds != null ? `${String(order.age_seconds)}s` : '—'}</span>
+                        {order.cancel_reason ? <span>motivo annullo: {humanizeCode(order.cancel_reason)}</span> : null}
                       </div>
                     </div>
                   ))}
