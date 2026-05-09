@@ -432,13 +432,37 @@ type RuntimeDemoPositionsPayload = {
   mode: string
   positionCount: number
   openCount: number
+  closedCount?: number
   filledOrderCount: number
   openOrderCount: number
   canceledOrderCount: number
   ignoredOrderCount: number
+  exposureUsdt?: number
+  unrealizedPnlUsdt?: number
+  realizedPnlUsdt?: number
   positions: Array<Record<string, unknown>>
   ignoredOrders: Array<Record<string, unknown>>
   events: Array<Record<string, unknown>>
+  safety?: Record<string, unknown>
+}
+
+type RuntimeDemoExitManagerPayload = {
+  fileExists: boolean
+  updatedAt: number | null
+  logExists?: boolean
+  logUpdatedAt?: number | null
+  logEventCount?: number
+  generatedAt: string | null
+  mode: string
+  brokerMode: string | null
+  exitOrderCount: number
+  openExitOrderCount: number
+  filledExitOrderCount: number
+  submittedEventCount: number
+  skippedCount: number
+  exitOrders: Array<Record<string, unknown>>
+  events: Array<Record<string, unknown>>
+  skipped: Array<Record<string, unknown>>
   safety?: Record<string, unknown>
 }
 
@@ -545,6 +569,7 @@ type VtPayload = {
   runtimeDemoBridge?: RuntimeDemoBridgePayload
   runtimeDemoOrderMonitor?: RuntimeDemoOrderMonitorPayload
   runtimeDemoPositions?: RuntimeDemoPositionsPayload
+  runtimeDemoExitManager?: RuntimeDemoExitManagerPayload
   runtimePortfolioStatus?: RuntimePortfolioStatusPayload
   runtimeOperationalJournal?: RuntimeOperationalJournalPayload
   strategyTestLogs?: StrategyTestLogPayload
@@ -1776,18 +1801,29 @@ export function VtCapitalScreen() {
         does: 'Invia solo micro ordini al conto demo dopo segnale runtime, Concilium operativo e Guardian APPROVED; il monitor aggiorna stato e cancella ordini demo scaduti.',
         input: 'Order proposal approvata da Guardian + feature flag demo + idempotenza anti-duplicato + monitor TTL.',
         output: 'data/runtime/demo-broker-bridge.json + demo-order-monitor.json con order id demo, stato, scope e cancellazioni stale.',
-        next: 'Collegare fill/cancel al ledger posizioni demo e PnL broker consolidato.',
+        next: 'Fill/cancel sono collegati al ledger posizioni demo; il gap ora è gestione uscita stop/TP demo e storico chiusure.',
       },
       {
         id: 'runtime-demo-positions',
         title: 'Posizioni broker demo',
         group: 'queue',
         status: (data?.runtimeDemoPositions?.openCount ?? 0) > 0 ? 'demo' : 'observe',
-        summary: `${data?.runtimeDemoPositions?.openCount ?? 0} posizione/i demo aperte · ${data?.runtimeDemoPositions?.canceledOrderCount ?? 0} ordine/i demo cancellati/non filled · live bloccato.`,
+        summary: `${data?.runtimeDemoPositions?.openCount ?? 0} posizione/i demo aperte · ${data?.runtimeDemoPositions?.closedCount ?? 0} chiuse · PnL aperto ${Number(data?.runtimeDemoPositions?.unrealizedPnlUsdt ?? 0).toFixed(5)} USDT · live bloccato.`,
         does: 'Trasforma solo ordini demo realmente filled in posizioni demo broker; gli ordini cancellati restano eventi, non posizioni.',
         input: 'demo-order-monitor.json con filled/remaining/status aggiornati dal broker demo.',
-        output: 'data/runtime/demo-positions.json/jsonl con posizioni broker demo e ordini ignorati/cancellati.',
-        next: 'Aggiungere PnL broker demo e stop/TP demo quando un ordine viene filled.',
+        output: 'data/runtime/demo-positions.json/jsonl con posizioni broker demo, PnL, stop/TP e chiusure.',
+        next: 'Uscita demo controllata monitora stop/TP e invia solo close order demo quando il trigger è colpito.',
+      },
+      {
+        id: 'runtime-demo-exit-manager',
+        title: 'Uscita demo stop/TP',
+        group: 'queue',
+        status: (data?.runtimeDemoExitManager?.exitOrderCount ?? 0) > 0 ? 'demo' : 'observe',
+        summary: `${data?.runtimeDemoExitManager?.exitOrderCount ?? 0} close order demo · ${data?.runtimeDemoExitManager?.openExitOrderCount ?? 0} aperti · ${data?.runtimeDemoExitManager?.filledExitOrderCount ?? 0} filled · live bloccato.`,
+        does: 'Chiude/riduce solo posizioni broker demo già aperte quando prezzo tocca stop loss o take profit.',
+        input: 'data/runtime/demo-positions.json con stop_loss/take_profit e broker demo/sandbox.',
+        output: 'data/runtime/demo-exit-manager.json/jsonl con close order demo e trigger.',
+        next: 'Mostrare storico chiusure demo e PnL realizzato nel Diario operativo.',
       },
     ]
   }, [data, performance, strategyCounts])
@@ -1812,7 +1848,8 @@ export function VtCapitalScreen() {
           `Runtime Concilium: ${data?.runtimeConcilium?.decisionCount ?? 0} decisione/i read-only`,
           `Paper locale: ${data?.runtimePaperPositions?.openCount ?? 0} posizione/i aperte`,
           `Broker demo: ${data?.runtimeDemoBridge?.orderCount ?? 0} ordine/i inviati · ${data?.runtimeDemoOrderMonitor?.openCount ?? 0} aperti · ${data?.runtimeDemoOrderMonitor?.canceledCount ?? 0} annullati`,
-          `Posizioni broker demo: ${data?.runtimeDemoPositions?.openCount ?? 0} aperte · ${data?.runtimeDemoPositions?.ignoredOrderCount ?? 0} ordine/i non filled/cancellati`,
+          `Posizioni broker demo: ${data?.runtimeDemoPositions?.openCount ?? 0} aperte · ${data?.runtimeDemoPositions?.closedCount ?? 0} chiuse · PnL aperto ${Number(data?.runtimeDemoPositions?.unrealizedPnlUsdt ?? 0).toFixed(5)} USDT`,
+          `Uscita demo stop/TP: ${data?.runtimeDemoExitManager?.exitOrderCount ?? 0} close order · ${data?.runtimeDemoExitManager?.skippedCount ?? 0} check senza trigger`,
         ],
       },
       {
@@ -2915,9 +2952,9 @@ export function VtCapitalScreen() {
                 </div>
                 <div className="mb-3 grid gap-2 sm:grid-cols-4">
                   <Metric label="Aperte broker demo" value={data.runtimeDemoPositions?.openCount ?? 0} tone={(data.runtimeDemoPositions?.openCount ?? 0) > 0 ? 'warn' : 'good'} />
-                  <Metric label="Ordini filled" value={data.runtimeDemoPositions?.filledOrderCount ?? 0} tone={(data.runtimeDemoPositions?.filledOrderCount ?? 0) > 0 ? 'warn' : 'neutral'} />
-                  <Metric label="Ordini ignorati" value={data.runtimeDemoPositions?.ignoredOrderCount ?? 0} tone={(data.runtimeDemoPositions?.ignoredOrderCount ?? 0) > 0 ? 'good' : 'neutral'} />
-                  <Metric label="Live" value="bloccato" tone="good" />
+                  <Metric label="Chiuse broker demo" value={data.runtimeDemoPositions?.closedCount ?? 0} tone={(data.runtimeDemoPositions?.closedCount ?? 0) > 0 ? 'good' : 'neutral'} />
+                  <Metric label="PnL demo aperto" value={`${Number(data.runtimeDemoPositions?.unrealizedPnlUsdt ?? 0).toFixed(5)} USDT`} tone={Number(data.runtimeDemoPositions?.unrealizedPnlUsdt ?? 0) >= 0 ? 'good' : 'warn'} />
+                  <Metric label="PnL demo chiuso" value={`${Number(data.runtimeDemoPositions?.realizedPnlUsdt ?? 0).toFixed(5)} USDT`} tone={Number(data.runtimeDemoPositions?.realizedPnlUsdt ?? 0) >= 0 ? 'good' : 'warn'} />
                 </div>
                 <div className="space-y-2">
                   {(data.runtimeDemoPositions?.positions ?? []).slice(0, 5).map((position, index) => (
@@ -2935,9 +2972,16 @@ export function VtCapitalScreen() {
                         </span>
                       </div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                        <span>entry: {String(position.entry_price ?? '—')}</span>
+                        <span>entry reale: {String(position.entry_price ?? '—')}</span>
+                        <span>ultimo prezzo: {String(position.last_price ?? '—')}</span>
+                        <span>PnL aperto: {String(position.unrealized_pnl_usdt ?? '—')} USDT ({String(position.unrealized_pnl_pct ?? '—')}%)</span>
+                        {position.status === 'CLOSED' ? <span>PnL chiuso: {String(position.realized_pnl_usdt ?? '—')} USDT ({String(position.realized_pnl_pct ?? '—')}%)</span> : null}
+                        {position.status === 'CLOSED' ? <span>exit: {String(position.exit_price ?? '—')} · motivo {humanizeCode(position.close_reason ?? '—')}</span> : null}
                         <span>quantità filled: {String(position.quantity ?? '—')}</span>
                         <span>notional: {String(position.notional_usdt ?? '—')} USDT</span>
+                        <span>stop: {String(position.stop_loss ?? '—')}</span>
+                        <span>take profit: {String(position.take_profit ?? '—')}</span>
+                        <span>timeframe/setup: {String(position.timeframe ?? '—')} · {String(position.setup ?? '—')}</span>
                         <span>strategia: {String(position.strategy_id ?? '—')}</span>
                         <span>order id: {String(position.source_demo_order_id ?? '—').slice(0, 14)}</span>
                         <span>aperta: {formatIsoTime(position.opened_at)}</span>
@@ -2956,6 +3000,34 @@ export function VtCapitalScreen() {
                       event={order}
                     />
                   ))}
+                </div>
+              </div>
+              <div className="rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>
+                <div className="mb-2 text-sm font-semibold text-foreground">
+                  Uscita demo stop/TP
+                </div>
+                <div className="mb-3 text-xs text-muted">
+                  Controlla le posizioni broker demo aperte e invia solo close order demo quando il prezzo tocca stop loss o take profit. Non apre nuove posizioni e live resta bloccato.
+                </div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-4">
+                  <Metric label="Close order" value={data.runtimeDemoExitManager?.exitOrderCount ?? 0} tone={(data.runtimeDemoExitManager?.exitOrderCount ?? 0) > 0 ? 'warn' : 'neutral'} />
+                  <Metric label="Close aperti" value={data.runtimeDemoExitManager?.openExitOrderCount ?? 0} tone={(data.runtimeDemoExitManager?.openExitOrderCount ?? 0) > 0 ? 'warn' : 'good'} />
+                  <Metric label="Close filled" value={data.runtimeDemoExitManager?.filledExitOrderCount ?? 0} tone={(data.runtimeDemoExitManager?.filledExitOrderCount ?? 0) > 0 ? 'good' : 'neutral'} />
+                  <Metric label="Ultimo check" value={data.runtimeDemoExitManager?.fileExists ? 'ok' : 'manca'} tone={data.runtimeDemoExitManager?.fileExists ? 'good' : 'warn'} />
+                </div>
+                <div className="space-y-2">
+                  {(data.runtimeDemoExitManager?.exitOrders ?? []).slice(-5).reverse().map((order, index) => (
+                    <MiniEvent
+                      key={`${String(order.order_id ?? index)}`}
+                      label={`Close demo · ${String(order.symbol ?? '—')} · ${humanizeCode(order.trigger ?? '—')}`}
+                      event={order}
+                    />
+                  ))}
+                  {(data.runtimeDemoExitManager?.exitOrders ?? []).length === 0 ? (
+                    <div className="rounded-lg border p-3 text-xs text-muted" style={{ background: 'var(--theme-card2)', borderColor: 'var(--theme-border)' }}>
+                      Nessun close order demo: stop/target non ancora colpiti. Ultimo check: {humanizeCode(data.runtimeDemoExitManager?.skipped?.[0]?.reason ?? 'nessun dato')}.
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="rounded-xl border p-4" style={{ background: 'var(--theme-card)', borderColor: 'var(--theme-border)' }}>

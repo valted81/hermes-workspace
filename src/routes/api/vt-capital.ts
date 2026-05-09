@@ -141,6 +141,14 @@ const VT_RUNTIME_DEMO_POSITIONS_LOG_PATH = path.join(
   VT_REPO_DIR,
   'data/runtime/demo-positions.jsonl',
 )
+const VT_RUNTIME_DEMO_EXIT_MANAGER_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/demo-exit-manager.json',
+)
+const VT_RUNTIME_DEMO_EXIT_MANAGER_LOG_PATH = path.join(
+  VT_REPO_DIR,
+  'data/runtime/demo-exit-manager.jsonl',
+)
 const VT_RUNTIME_PORTFOLIO_STATUS_PATH = path.join(
   VT_REPO_DIR,
   'data/runtime/portfolio-status.json',
@@ -1387,6 +1395,15 @@ export function readRuntimeDemoPositions(): JsonRecord {
     positionCount:
       typeof raw?.position_count === 'number' ? raw.position_count : positions.length,
     openCount: typeof raw?.open_count === 'number' ? raw.open_count : 0,
+    closedCount: typeof raw?.closed_count === 'number' ? raw.closed_count : 0,
+    exposureUsdt:
+      typeof raw?.exposure_usdt === 'number' ? raw.exposure_usdt : 0,
+    unrealizedPnlUsdt:
+      typeof raw?.unrealized_pnl_usdt === 'number'
+        ? raw.unrealized_pnl_usdt
+        : 0,
+    realizedPnlUsdt:
+      typeof raw?.realized_pnl_usdt === 'number' ? raw.realized_pnl_usdt : 0,
     filledOrderCount:
       typeof raw?.filled_order_count === 'number' ? raw.filled_order_count : 0,
     openOrderCount:
@@ -1403,6 +1420,56 @@ export function readRuntimeDemoPositions(): JsonRecord {
       readOnlyFromMonitor: safety.read_only_from_monitor !== false,
       placesOrders: safety.places_orders === true,
       liveTradingEnabled: safety.live_trading_enabled === true,
+    },
+  }
+}
+
+export function readRuntimeDemoExitManager(): JsonRecord {
+  const stat = safeStat(VT_RUNTIME_DEMO_EXIT_MANAGER_PATH)
+  const logStat = safeStat(VT_RUNTIME_DEMO_EXIT_MANAGER_LOG_PATH)
+  const raw = readJsonFile(VT_RUNTIME_DEMO_EXIT_MANAGER_PATH)
+  const exitOrders = Array.isArray(raw?.exit_orders) ? raw.exit_orders : []
+  const events = Array.isArray(raw?.events) ? raw.events : []
+  const skipped = Array.isArray(raw?.skipped) ? raw.skipped : []
+  const safety =
+    raw?.safety && typeof raw.safety === 'object' && !Array.isArray(raw.safety)
+      ? (raw.safety as JsonRecord)
+      : {}
+  return {
+    fileExists: Boolean(stat),
+    updatedAt: stat?.mtimeMs ?? null,
+    logExists: Boolean(logStat),
+    logUpdatedAt: logStat?.mtimeMs ?? null,
+    logEventCount: countJsonlRecords(VT_RUNTIME_DEMO_EXIT_MANAGER_LOG_PATH),
+    generatedAt:
+      typeof raw?.generated_at === 'string' ? raw.generated_at : null,
+    mode:
+      typeof raw?.mode === 'string'
+        ? raw.mode
+        : 'runtime_demo_exit_manager_controlled',
+    brokerMode: typeof raw?.broker_mode === 'string' ? raw.broker_mode : null,
+    exitOrderCount:
+      typeof raw?.exit_order_count === 'number' ? raw.exit_order_count : exitOrders.length,
+    openExitOrderCount:
+      typeof raw?.open_exit_order_count === 'number' ? raw.open_exit_order_count : 0,
+    filledExitOrderCount:
+      typeof raw?.filled_exit_order_count === 'number' ? raw.filled_exit_order_count : 0,
+    submittedEventCount:
+      typeof raw?.submitted_event_count === 'number' ? raw.submitted_event_count : events.length,
+    skippedCount:
+      typeof raw?.skipped_count === 'number' ? raw.skipped_count : skipped.length,
+    exitOrders,
+    events,
+    skipped,
+    safety: {
+      demoOnly: safety.demo_only === true,
+      liveTradingEnabled: safety.live_trading_enabled === true,
+      requiresExitFlag: safety.requires_exit_flag !== false,
+      requiresExecutionFlag: safety.requires_execution_flag !== false,
+      maxExitNotionalUsdt:
+        typeof safety.max_exit_notional_usdt === 'number'
+          ? safety.max_exit_notional_usdt
+          : null,
     },
   }
 }
@@ -1734,6 +1801,8 @@ export const Route = createFileRoute('/api/vt-capital')({
             runtimeDemoOrderMonitorLog: VT_RUNTIME_DEMO_ORDER_MONITOR_LOG_PATH,
             runtimeDemoPositions: VT_RUNTIME_DEMO_POSITIONS_PATH,
             runtimeDemoPositionsLog: VT_RUNTIME_DEMO_POSITIONS_LOG_PATH,
+            runtimeDemoExitManager: VT_RUNTIME_DEMO_EXIT_MANAGER_PATH,
+            runtimeDemoExitManagerLog: VT_RUNTIME_DEMO_EXIT_MANAGER_LOG_PATH,
             runtimePortfolioStatus: VT_RUNTIME_PORTFOLIO_STATUS_PATH,
             runtimePortfolioStatusLog: VT_RUNTIME_PORTFOLIO_STATUS_LOG_PATH,
             runtimeOperationalJournal: VT_RUNTIME_OPERATIONAL_JOURNAL_PATH,
@@ -1771,6 +1840,7 @@ export const Route = createFileRoute('/api/vt-capital')({
           runtimeDemoBridge: readRuntimeDemoBridge(),
           runtimeDemoOrderMonitor: readRuntimeDemoOrderMonitor(),
           runtimeDemoPositions: readRuntimeDemoPositions(),
+          runtimeDemoExitManager: readRuntimeDemoExitManager(),
           runtimePortfolioStatus: readRuntimePortfolioStatus(),
           runtimeOperationalJournal: readRuntimeOperationalJournal(),
           strategyTestLogs: summarizeStrategyTestLogs(
