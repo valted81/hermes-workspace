@@ -904,6 +904,18 @@ function humanizeCode(value: unknown): string {
     submitted: 'Inviato',
     created: 'Creato',
     closed: 'Chiuso',
+    canceled: 'Annullato',
+    cancelled: 'Annullato',
+    rejected: 'Rifiutato',
+    expired: 'Scaduto',
+    paper_only_demo_order_canceled: 'Paper locale, demo annullato/non fillato',
+    paper_only_no_demo_order: 'Solo paper locale, nessun ordine demo',
+    demo_order_pending: 'Ordine demo in attesa',
+    demo_position_linked: 'Paper e demo collegati',
+    demo_partial_fill_no_position_ledger: 'Fill demo da collegare al ledger',
+    paper_position_without_demo_fill: 'Paper senza fill broker demo',
+    demo_order_canceled_not_filled: 'Ordine demo annullato/non fillato',
+    paper_position_near_stop: 'Paper vicino allo stop',
   }
   if (labels[normalized]) return labels[normalized]
   return raw
